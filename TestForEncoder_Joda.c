@@ -5,22 +5,37 @@
 #include "hardware/timer.h"
 #include "hardware/clocks.h"
 #include "math.h"
-double calculate_length(double Dmax, double Dmin, double rotations)
+
+/*double calculate_length(double Dmax, double Dmin, double rotations)
 {
     double PI = 3.14159265358979323846;
-    double part1 = (Dmax * PI) / 12.0;
+    double part1 = (Dmax / 12) * PI;
     double factor = pow((rotations / 0.9231), (5000.0 / 5119.0));
-    double part2 = (Dmax - Dmin) / (12.0 * 2426.2 * pow(factor, -0.985));
+    double part2 = (Dmax - Dmin) / (29114.4 * pow(factor, -0.985));
     double length = (part1 - part2) * rotations;
     return length;    
 }
-
-
+*/
+    int calculate_length(double Dmax, double Dmin, double rotations)
+{
+    double PI = 3.14;
+    double part1 = (Dmax * PI) / 12.0;
+    //double factor = pow((rotations / 0.9231), (0.977));
+    double part2 = (Dmax - Dmin) / (12 * 2426.2 * pow((rotations / 0.9231), (5000.0 / 5119.0)) * pow(-1, 0.985));
+    int tempLength = (part1 - part2) * rotations;
+    
+    printf("PI: %d\n", PI);
+    printf("part1 (Dmax): %d\n", part1);
+    printf("part2: %d\n", part2);   
+    return tempLength;
+}
+    
 
 
 
 int main()
 {
+
     stdio_init_all();
     gpio_init(22);
     gpio_set_dir(22, GPIO_OUT);
@@ -28,10 +43,11 @@ int main()
     gpio_set_dir(8, GPIO_IN);
     gpio_init(9);
     gpio_set_dir(9, GPIO_IN);
-    int Dmax = 3.685;
-    int Dmin = 2.00;
-    double length = 0;
-    int rotations =0;
+    
+    double Dmax = 3.685;
+    double Dmin = 2.00;
+    float length = 0;
+    float rotations =0;
     int count = 0;
     int newcount = 0;
     int rot = 0;
@@ -98,13 +114,19 @@ int main()
                 
             }
             else if (count == -48){
-                rotations--;
-                count = 0;
-            }
+                
+                
+                    rotations--;
+                    count = 0;
+                }
+            
             printf("rotations: %d\n", rotations);
-            double length = calculate_length(Dmax, Dmin, rotations);
-            printf("length: %d\n", length);
+           
+            
+        int length = calculate_length(Dmax, Dmin, rotations);
+        printf("length: %lu\n", length);      
         }
+       
     //newcount = count;   
     oldVal = newVal;
     
