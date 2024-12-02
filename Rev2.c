@@ -61,6 +61,7 @@ int main()
     while (true) {
         chanA = gpio_get(8);
         chanB = gpio_get(9);
+        
         if (chanA == 1) {
             if (chanB == 1){
                 newVal = 11;
@@ -76,6 +77,7 @@ int main()
         }
         
         if (newVal != oldVal) {
+           
             if (oldVal == 11) {
                 if (newVal == 10) {
                     gpio_put(22, 1);
@@ -121,21 +123,29 @@ int main()
                     --rotations;
                     //rotations == rotations - 1;
                     count = 0;
+                    
                 }
-            if (rotations<=0 ||rotations==0);
-                {
-                    length = 0;
-                }
+            
+            
         printf("rotations: %d\n", rotations);
           
-        if (length < -1);
+        //if (length < 0);
+        //{
+        //    length = 0;
+        //}  
+        if (rotations >=1)
         {
-            length = 0;
-        }    
         int length = calculate_length(Dmax, Dmin, rotations);
-       
-        //printf("length: %lu\n", length); 
         printf("length: %d\n", length); 
+        }
+        else if (rotations <=0){
+         
+            length =0;
+            printf("length: %d\n", length); 
+        }
+        //int length = calculate_length(Dmax, Dmin, rotations);
+        //printf("length: %lu\n", length); 
+        //printf("length: %d\n", length); 
         }
      
      
