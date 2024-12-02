@@ -21,7 +21,8 @@
     double PI = 3.14;
     double part1 = (Dmax * PI) / 12.0;
     //double factor = pow((rotations / 0.9231), (0.977));
-    double part2 = (Dmax - Dmin) / (12 * 2426.2 * pow((rotations / 0.9231), (5000.0 / 5119.0)) * pow(-1, 0.985));
+    //double part2 = (Dmax - Dmin) / (12 * 2426.2 * pow((rotations / 0.9231), (5000.0 / 5119.0)) * pow(1, -0.985));
+    double part2 = (Dmax - Dmin) / (12 * 2426.2 * pow((rotations / 0.9231), (5000.0 / 5119.0)) * pow(1, -0.985));
     int tempLength = (part1 - part2) * rotations;
     
    // printf("PI: %d\n", PI);
@@ -110,21 +111,27 @@ int main()
             }
             printf("count: %d\n", count); 
             
-            if (count==834){
+            if (count==204){
                 rotations++;
                 count = 0;
                 
             }
-            else if (count == -834){
-                
-                
+            //else if (count == -834){
+            if (count == -204){  
                     --rotations;
+                    //rotations == rotations - 1;
                     count = 0;
                 }
-            
-            printf("rotations: %d\n", rotations);
-           
-            
+            if (rotations<=0 ||rotations==0);
+                {
+                    length = 0;
+                }
+        printf("rotations: %d\n", rotations);
+          
+        if (length < -1);
+        {
+            length = 0;
+        }    
         int length = calculate_length(Dmax, Dmin, rotations);
        
         //printf("length: %lu\n", length); 
