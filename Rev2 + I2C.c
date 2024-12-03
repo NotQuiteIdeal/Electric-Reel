@@ -14,6 +14,7 @@
 #include "pico/binary_info.h"
 #include "math.h"
 #include "time.h"
+#include "pico/multicore.h"
 
 /* Example code to drive a 16x2 LCD panel via a I2C bridge chip (e.g. PCF8574)
 
@@ -175,10 +176,17 @@ void display(int lineLength) {
     snprintf(lineLengthStr, sizeof(lineLengthStr), "%d", lineLength);
     message[1] = lineLengthStr;
     printf("length (in Disp): %d\n", lineLength);
-    
-    for (int line = 0; line < MAX_LINES; line++) {
-        lcd_set_cursor(line, (MAX_CHARS / 2) - strlen(message[line]) / 2);
-        lcd_string(message[line]);
+    if (lineLength < 100 && lineLength > 85) {
+        lcd_clear();
+        for (int line = 0; line < MAX_LINES; line++) {
+            lcd_set_cursor(line, (MAX_CHARS / 2) - strlen(message[line]) / 2);
+            lcd_string(message[line]);
+        }
+    } else {
+        for (int line = 0; line < MAX_LINES; line++) {
+            lcd_set_cursor(line, (MAX_CHARS / 2) - strlen(message[line]) / 2);
+            lcd_string(message[line]);
+        }
     }
     
 }
@@ -274,13 +282,13 @@ int main() {
             }
             printf("count: %d\n", count); 
             
-            if (count==204){
+            if (count==208){
                 rotations++;
                 count = 0;
                 
             }
             //else if (count == -834){
-            if (count == -204){  
+            if (count == -208){  
                 --rotations;
                 //rotations == rotations - 1;
                 count = 0;
