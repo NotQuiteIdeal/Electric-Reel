@@ -41,6 +41,9 @@ const int LCD_FUNCTIONSET = 0x20;
 const int LCD_SETCGRAMADDR = 0x40;
 const int LCD_SETDDRAMADDR = 0x80;
 
+// variables for multicore
+volatile int length = 0;
+
 // flags for display entry mode
 const int LCD_ENTRYSHIFTINCREMENT = 0x01;
 const int LCD_ENTRYLEFT = 0x02;
@@ -176,7 +179,13 @@ void display(int lineLength) {
     snprintf(lineLengthStr, sizeof(lineLengthStr), "%d", lineLength);
     message[1] = lineLengthStr;
     printf("length (in Disp): %d\n", lineLength);
-    if (lineLength < 100 && lineLength > 85) {
+    if (lineLength < 100 && lineLength > 95) {
+        lcd_clear();
+        for (int line = 0; line < MAX_LINES; line++) {
+            lcd_set_cursor(line, (MAX_CHARS / 2) - strlen(message[line]) / 2);
+            lcd_string(message[line]);
+        }
+    } else if (lineLength < 10 && lineLength > 5) {
         lcd_clear();
         for (int line = 0; line < MAX_LINES; line++) {
             lcd_set_cursor(line, (MAX_CHARS / 2) - strlen(message[line]) / 2);
@@ -191,16 +200,32 @@ void display(int lineLength) {
     
 }
 
+void display_Core1() {
+    // Initialize I2C and LCD
+    stdio_init_all();
+    
+    
+    int receivedLength = 0;
+    display(receivedLength);
+    while(true) {
+        
+        
+        receivedLength = multicore_fifo_pop_blocking();
+        printf("Pulled value from FIFO length.\n");
+            
+        printf("Core 1 is active!\n");
+        printf("length (in if): %d\n", receivedLength);
+        display(receivedLength);
+        sleep_ms(200);
+    }
+}
+
 int main() {
     
 
-   // Initialize I2C and LCD
-    i2c_lcd_init();
+   
     
-    char *message[] =
-            {
-                    "Line Length", ""
-            }; 
+    
     
     
     stdio_init_all();
@@ -210,13 +235,18 @@ int main() {
     gpio_set_dir(8, GPIO_IN);
     gpio_init(9);
     gpio_set_dir(9, GPIO_IN);
-    
+
+    i2c_lcd_init();
+
+    //wippee
+    multicore_launch_core1(display_Core1);
+
     double Dmax = 3.685;
     double Dmin = 2.00;
     //float length = 0;
-    int length = 0;
+    
     //float rotations =0;
-    int rotations =2;
+    int rotations = 0;
     int count = 0;
     int newcount = 0;
     int rot = 0;
@@ -224,8 +254,8 @@ int main() {
     int chanB = gpio_get(9);
     int oldVal = 0;
     int newVal = 0;
-    time_t dispWait = clock();
-    display(length);
+    
+    
     while (true) {
         
         chanA = gpio_get(8);
@@ -305,22 +335,36 @@ int main() {
             if (rotations >=1) {
                 int length = calculate_length(Dmax, Dmin, rotations);
                 printf("length: %d\n", length); 
+                if (multicore_fifo_wready()) {
+                    printf("Length before FIFO: %d\n", length);
+                    multicore_fifo_push_blocking(length);
+                    printf("Pushed value to fifo\n");
+                }
+                /* Code removed as display was moved to core 1
                 if (((double)(clock() - dispWait)) / CLOCKS_PER_SEC >= 1.0) {
                     printf("length (in if): %d\n", length);
                     display(length);
                     dispWait = clock();  // Reset the timer for the next update
                 }
+                */
             
             }
             else if (rotations <=0) {
             
                 length =0;
                 printf("length: %d\n", length);
+                if (multicore_fifo_wready()) {
+                    printf("Length before FIFO: %d\n", length);
+                    multicore_fifo_push_blocking(length);
+                    printf("Pushed value to fifo\n");
+                }
+                /* Code removed as display was moved to core 1
                 if (((double)(clock() - dispWait)) / CLOCKS_PER_SEC >= 1.0) {
                     printf("length (in if): %d\n", length);
                     display(length);
                     dispWait = clock();  // Reset the timer for the next update
                 } 
+                */
             }
             //int length = calculate_length(Dmax, Dmin, rotations);
             //printf("length: %lu\n", length); 
@@ -328,8 +372,10 @@ int main() {
         }
      
      
-      
+        
         oldVal = newVal;
+        //Clears queue and updates length value for core1
+        
         
         
         
