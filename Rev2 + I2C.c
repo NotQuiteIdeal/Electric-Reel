@@ -209,9 +209,10 @@ void display_Core1() {
     display(receivedLength);
     while(true) {
         
-        
-        receivedLength = multicore_fifo_pop_blocking();
+        receivedLength = length;
+        //receivedLength = multicore_fifo_pop_blocking();
         printf("Pulled value from FIFO length.\n");
+        
             
         printf("Core 1 is active!\n");
         printf("length (in if): %d\n", receivedLength);
@@ -333,11 +334,12 @@ int main() {
             //    length = 0;
             //}  
             if (rotations >=1) {
-                int length = calculate_length(Dmax, Dmin, rotations);
+                length = calculate_length(Dmax, Dmin, rotations);
                 printf("length: %d\n", length); 
                 if (multicore_fifo_wready()) {
                     printf("Length before FIFO: %d\n", length);
-                    multicore_fifo_push_blocking(length);
+                    
+                    //multicore_fifo_push_blocking(length);
                     printf("Pushed value to fifo\n");
                 }
                 /* Code removed as display was moved to core 1
@@ -355,7 +357,8 @@ int main() {
                 printf("length: %d\n", length);
                 if (multicore_fifo_wready()) {
                     printf("Length before FIFO: %d\n", length);
-                    multicore_fifo_push_blocking(length);
+
+                    //multicore_fifo_push_blocking(length);
                     printf("Pushed value to fifo\n");
                 }
                 /* Code removed as display was moved to core 1
