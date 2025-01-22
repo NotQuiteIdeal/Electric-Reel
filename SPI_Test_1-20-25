@@ -1,0 +1,80 @@
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/spi.h"
+
+// SPI Pin Definitions
+#define SPI_PORT spi0
+#define PIN_CS   17 // Chip Select (CS)
+#define PIN_SCLK 18 // Clock (SCLK)
+#define PIN_MOSI 19 // Data (MOSI/SID)
+
+// Function to send commands to the LCD
+void lcd_write_command(uint8_t command) {
+    gpio_put(PIN_CS, 0); // Select LCD
+    spi_write_blocking(SPI_PORT, &command, 1); // Send command
+    gpio_put(PIN_CS, 1); // Deselect LCD
+    sleep_ms(2); // Command delay
+}
+
+// Function to send data to the LCD
+void lcd_write_data(uint8_t data) {
+    gpio_put(PIN_CS, 0); // Select LCD
+    uint8_t packet = data | 0x40; // Prefix 0x40 indicates data
+    spi_write_blocking(SPI_PORT, &packet, 1); // Send data
+    gpio_put(PIN_CS, 1); // Deselect LCD
+}
+
+// LCD Initialization
+void lcd_init() {
+    sleep_ms(50); // Power stabilization
+    lcd_write_command(0x30); // Function Set: 8-bit, 2-line
+    lcd_write_command(0x0C); // Display ON, Cursor OFF
+    lcd_write_command(0x01); // Clear Display
+    sleep_ms(2); // Delay for clear
+    lcd_write_command(0x06); // Entry Mode: Increment cursor
+}
+
+// Function to set cursor position
+void lcd_set_cursor(uint8_t row, uint8_t column) {
+    uint8_t row_offsets[] = {0x00, 0x20, 0x40, 0x60};
+    if (row > 3) row = 3; // Limit to 4 rows
+    lcd_write_command(0x80 | (row_offsets[row] + column));
+}
+
+// Function to display a string on the LCD
+void lcd_print(const char *str) {
+    while (*str) {
+        lcd_write_data(*str++);
+    }
+}
+
+int main() {
+    stdio_init_all();
+    printf("Starting LCD...\n");
+
+    // Initialize SPI
+    spi_init(SPI_PORT, 500000); // Set SPI clock to 500kHz
+    gpio_set_function(PIN_SCLK, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+
+    // Initialize CS pin
+    gpio_init(PIN_CS);
+    gpio_set_dir(PIN_CS, GPIO_OUT);
+    gpio_put(PIN_CS, 1); // Deselect LCD
+
+    // Initialize LCD
+    lcd_init();
+    printf("LCD Initialized.\n");
+
+    // Display "Hello, World!" on row 1
+    lcd_set_cursor(0, 0);
+    lcd_print("Hello, World!");
+
+    // Display a second message on row 2
+    lcd_set_cursor(1, 0);
+    lcd_print("LCD Test Successful!");
+
+    while (true) {
+        sleep_ms(1000); // Keep running
+    }
+}
