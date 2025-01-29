@@ -4,11 +4,10 @@
 
 // SPI Pins
 #define SPI_PORT spi0
-#define PIN_MISO 16  // SOD ← MUST CONNECT
-#define PIN_CS   17
-#define PIN_SCLK 18
-#define PIN_MOSI 19
-#define PIN_RES  20
+#define PIN_CS   17  // Chip Select
+#define PIN_SCLK 18  // Clock
+#define PIN_MOSI 19  // Data (SID)
+#define PIN_RES  22  // Reset (active low)
 
 // RW1073 Commands
 #define CMD_CLEAR       0x01
@@ -18,51 +17,37 @@
 #define CMD_FUNCTION    0x30
 #define CMD_EXT_FUNCTION 0x36
 
-// Busy Flag Check
-bool lcd_is_busy() {
-    uint8_t cmd = 0x00;  // Read BF + Address
-    uint8_t response;
-    
-    gpio_put(PIN_CS, 0);
-    spi_write_read_blocking(SPI_PORT, &cmd, &response, 1);
-    gpio_put(PIN_CS, 1);
-    
-    return (response & 0x80);  // BF is bit 7
-}
-
-void lcd_wait() {
-    while(lcd_is_busy()) { 
-        sleep_us(100); 
-    }
-}
-
+// Send a command to the LCD
 void lcd_command(uint8_t cmd) {
-    lcd_wait();
-    gpio_put(PIN_CS, 0);
+    gpio_put(PIN_CS, 0);  // Select LCD
     spi_write_blocking(SPI_PORT, &cmd, 1);
-    gpio_put(PIN_CS, 1);
+    gpio_put(PIN_CS, 1);  // Deselect LCD
+    sleep_ms(2);          // Fixed delay instead of Busy Flag
+    printf("Command sent: 0x%02X\n", cmd);
 }
 
+// Send data to the LCD
 void lcd_data(uint8_t data) {
-    lcd_wait();
-    gpio_put(PIN_CS, 0);
-    uint8_t packet = data | 0x40;  // RS=1
+    gpio_put(PIN_CS, 0);  // Select LCD
+    uint8_t packet = data | 0x40;  // RS=1 for data
     spi_write_blocking(SPI_PORT, &packet, 1);
-    gpio_put(PIN_CS, 1);
+    gpio_put(PIN_CS, 1);  // Deselect LCD
+    sleep_ms(1);          // Fixed delay instead of Busy Flag
+    printf("Data sent: 0x%02X\n", data);
 }
 
+// Initialize the LCD
 void lcd_init() {
     // Hardware Reset
     gpio_init(PIN_RES);
     gpio_set_dir(PIN_RES, GPIO_OUT);
-    gpio_put(PIN_RES, 0);
+    gpio_put(PIN_RES, 0);  // Active low reset
     sleep_ms(50);
     gpio_put(PIN_RES, 1);
-    sleep_ms(150);
+    sleep_ms(150);  // Wait >100ms after reset
 
     // SPI Configuration
-    spi_init(SPI_PORT, 100000);  // 100kHz
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
+    spi_init(SPI_PORT, 100000);  // 100kHz clock
     gpio_set_function(PIN_SCLK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
 
@@ -84,7 +69,16 @@ void lcd_init() {
 
 int main() {
     stdio_init_all();
+    printf("Initializing LCD...\n");
+
+    // Initialize CS pin
+    gpio_init(PIN_CS);
+    gpio_set_dir(PIN_CS, GPIO_OUT);
+    gpio_put(PIN_CS, 1);  // Deselect LCD by default
+
+    // Initialize LCD
     lcd_init();
+    printf("LCD Initialized.\n");
 
     // Write to all 4 lines
     lcd_command(0x80);  // Line 1
@@ -92,6 +86,8 @@ int main() {
     
     lcd_command(0xA0);  // Line 2
     lcd_data('W'); lcd_data('o'); lcd_data('r'); lcd_data('l'); lcd_data('d');
+
+    printf("Display updated.\n");
 
     while(1) tight_loop_contents();
 }
