@@ -1,0 +1,154 @@
+#include <stdio.h>
+#include <string.h>  // For strlen()
+#include "pico/stdlib.h"
+
+// === LCD Pin Definitions === //
+#define PIN_RS  20  
+#define PIN_RW  21  
+#define PIN_E   19  
+#define PIN_RES 22  
+
+// 8-bit Data Bus
+#define PIN_DB0 10
+#define PIN_DB1 11
+#define PIN_DB2 12
+#define PIN_DB3 13
+#define PIN_DB4 14
+#define PIN_DB5 15
+#define PIN_DB6 16
+#define PIN_DB7 17
+
+// === Function: Initialize GPIO === //
+void gpio_setup() {
+    gpio_init(PIN_RS);
+    gpio_init(PIN_RW);
+    gpio_init(PIN_E);
+    gpio_init(PIN_RES);
+
+    gpio_set_dir(PIN_RS, GPIO_OUT);
+    gpio_set_dir(PIN_RW, GPIO_OUT);
+    gpio_set_dir(PIN_E, GPIO_OUT);
+    gpio_set_dir(PIN_RES, GPIO_OUT);
+
+    for (int pin = PIN_DB0; pin <= PIN_DB7; pin++) {
+        gpio_init(pin);
+        gpio_set_dir(pin, GPIO_OUT);
+    }
+
+    gpio_put(PIN_RS, 0);
+    gpio_put(PIN_RW, 0);
+    gpio_put(PIN_E, 0);
+}
+
+// === Function: Reset LCD === //
+void lcd_reset() {
+    gpio_put(PIN_RES, 0);
+    sleep_ms(10);
+    gpio_put(PIN_RES, 1);
+    sleep_ms(100);
+}
+
+// === Function: Write Data to LCD Bus === //
+void lcd_write_bus(uint8_t data) {
+    for (int i = 0; i < 8; i++) {
+        gpio_put(PIN_DB0 + i, (data >> i) & 1);
+    }
+}
+
+// === Function: Pulse Enable Signal === //
+void lcd_pulse_enable() {
+    gpio_put(PIN_E, 1);
+    sleep_us(50);
+    gpio_put(PIN_E, 0);
+    sleep_us(50);
+}
+
+// === Function: Send Command to LCD === //
+void lcd_send_command(uint8_t cmd) {
+    gpio_put(PIN_RS, 0);
+    gpio_put(PIN_RW, 0);
+    lcd_write_bus(cmd);
+    lcd_pulse_enable();
+    sleep_ms(2);
+}
+
+// === Function: Send Data to LCD === //
+void lcd_send_data(uint8_t data) {
+    gpio_put(PIN_RS, 1);
+    gpio_put(PIN_RW, 0);
+    lcd_write_bus(data);
+    lcd_pulse_enable();
+    sleep_ms(1);
+}
+
+// === Function: Initialize LCD === //
+void lcd_init() {
+    lcd_reset();
+    printf("[LCD] Initializing...\n");
+
+    lcd_send_command(0x30);
+    sleep_ms(10);
+
+    lcd_send_command(0x06);
+    sleep_ms(5);
+
+    lcd_send_command(0x36);
+    sleep_ms(10);
+
+    lcd_send_command(0x09);
+    sleep_ms(5);
+
+    lcd_send_command(0x30);
+    sleep_ms(10);
+
+    lcd_send_command(0x0C);
+    sleep_ms(5);
+
+    lcd_send_command(0x01);
+    sleep_ms(10);
+
+    printf("[LCD] Initialization Complete!\n");
+}
+
+// === Function: Print a String to the LCD === //
+void lcd_print(const char *str) {
+    while (*str) {
+        lcd_send_data(*str++);
+    }
+}
+
+// === Function: Print a Centered String to the LCD === //
+void lcd_print_centered(const char *str, uint8_t line) {
+    uint8_t text_length = strlen(str);
+    if (text_length > 20) text_length = 20;  // Ensure text fits
+
+    uint8_t start_pos = (20 - text_length) / 2;  // Calculate center position
+    uint8_t ddram_address = 0x00;
+
+    switch (line) {
+        case 1: ddram_address = 0x00 + start_pos; break;
+        case 2: ddram_address = 0x20 + start_pos; break;
+        case 3: ddram_address = 0x40 + start_pos; break;
+        case 4: ddram_address = 0x60 + start_pos; break;
+        default: return;
+    }
+
+    lcd_send_command(0x80 | ddram_address);
+    lcd_print(str);
+}
+
+// === Main Function === //
+int main() {
+    stdio_init_all();
+    gpio_setup();
+    lcd_init();
+
+    lcd_print_centered("Hello, World!", 1);
+    lcd_print_centered("DD Reels", 2);
+    lcd_print_centered("Gabriel Joda", 3);
+    lcd_print_centered("Electronic Reel", 4);
+
+    while (1) {
+        sleep_ms(1000);
+    }
+}
