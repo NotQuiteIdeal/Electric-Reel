@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+
+#define I2C_PORT i2c0
+#define SDA_PIN 4
+#define SCL_PIN 5
+#define CFA634_I2C_ADDR 0x42  // I2C address (7-bit format)
+
+// Function to send a command to the LCD
+void cfa634_send_command(uint8_t cmd) {
+    uint8_t buffer[2] = {0xFE, cmd};  // Command format
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 2, false);
+
+    if (result < 0) {
+        printf("I2C ERROR: Failed to send command 0x%02X\n", cmd);
+    } else {
+        printf("I2C SUCCESS: Sent command 0x%02X\n", cmd);
+    }
+    sleep_ms(100);
+}
+
+// Function to print text on the LCD (character by character)
+void cfa634_print(const char *text) {
+    printf("Sending text to LCD: %s\n", text);
+    for (size_t i = 0; i < strlen(text); i++) {
+        int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, (uint8_t *)&text[i], 1, false);
+        if (result < 0) {
+            printf("I2C ERROR: Failed to send character %c\n", text[i]);
+        }
+        sleep_ms(2); // Small delay for LCD to process
+    }
+    printf("I2C SUCCESS: Sent text to LCD\n");
+}
+
+
+
+// Function to initialize I2C
+void i2c_setup() {
+    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+}
+
+void cfa634_clear_screen() {
+    uint8_t clear_cmd = 0x0C;  // Form Feed (Control+L) in ASCII
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &clear_cmd, 1, false);
+
+    if (result < 0) {
+        printf("I2C ERROR: Failed to clear screen!\n");
+    } else {
+        printf("I2C SUCCESS: Screen cleared\n");
+    }
+
+    sleep_ms(3);  // Give LCD time to process
+}
+
+
+int main() {
+    stdio_init_all();
+    i2c_setup();
+
+    sleep_ms(500); // Wait for LCD to power up
+
+    cfa634_clear_screen();
+
+
+    cfa634_print("Hello, World!"); // Print text
+
+    while (1) {
+        printf("Running...\n");
+        sleep_ms(1000);
+    }
+}
