@@ -1,0 +1,96 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+
+#define I2C_PORT i2c0
+#define SDA_PIN 4
+#define SCL_PIN 5
+#define CFA634_I2C_ADDR 0x42  // I2C address (7-bit format)
+
+// Function to send a command to the LCD
+void cfa634_send_command(uint8_t cmd) {
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &cmd, 1, false);
+    if (result < 0) {
+        printf("I2C ERROR: Failed to send command 0x%02X\n", cmd);
+    }
+    sleep_ms(50);
+}
+
+// Function to clear the screen
+void cfa634_clear_screen() {
+    uint8_t clear_cmd = 0x0C;  // Clear Screen (ASCII Form Feed)
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &clear_cmd, 1, false);
+
+    if (result < 0) {
+        printf("I2C ERROR: Failed to clear screen!\n");
+    }
+
+    sleep_ms(100);  // Give LCD time to process
+}
+
+// Function to set the cursor position
+void cfa634_set_cursor(uint8_t col, uint8_t row) {
+    if (col > 19 || row > 3) {
+        printf("ERROR: Invalid cursor position! Col: %d, Row: %d\n", col, row);
+        return;
+    }
+
+    uint8_t buffer[3] = {0x11, col, row};  // 0x11 <column> <row>
+    i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 3, false);
+    sleep_ms(50);  // Allow LCD to adjust
+}
+
+// Function to print text at a specific cursor position
+void cfa634_print_at(uint8_t col, uint8_t row, const char *text) {
+    cfa634_set_cursor(col, row);
+    sleep_ms(50); // Ensure cursor is set before printing
+    
+    for (size_t i = 0; i < strlen(text); i++) {
+        i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, (uint8_t *)&text[i], 1, false);
+        sleep_ms(2);  // Small delay for LCD processing
+    }
+}
+
+// Function to print centered text on a specific row
+void cfa634_print_centered(const char *text, uint8_t row) {
+    size_t text_length = strlen(text);
+    if (text_length > 20) {
+        printf("ERROR: Text is too long to center!\n");
+        return;
+    }
+
+    uint8_t col = (20 - text_length) / 2;  // Calculate center column
+    printf("Centering text: '%s' at row %d, col %d\n", text, row, col);
+    
+    cfa634_print_at(col, row, text);
+}
+
+// Function to initialize I2C
+void i2c_setup() {
+    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+}
+
+int main() {
+    stdio_init_all();
+    i2c_setup();
+    sleep_ms(500); // Wait for LCD to power up
+
+    cfa634_clear_screen();
+    sleep_ms(500); // Ensure screen has time to clear
+
+    // Print centered text on different lines
+    cfa634_print_centered("Hello, World!", 0);
+    cfa634_print_centered("This is Line 2!", 1);
+    cfa634_print_centered("Centered Text", 2);
+    cfa634_print_centered("Final Line!", 3);
+
+    while (1) {
+        printf("Running...\n");
+        sleep_ms(1000);
+    }
+}
