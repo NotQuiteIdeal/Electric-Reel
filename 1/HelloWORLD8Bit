@@ -1,0 +1,145 @@
+#include <stdio.h>
+#include "pico/stdlib.h"
+
+// === LCD Pin Definitions === //
+#define PIN_RS  17  // Register Select (RS)
+#define PIN_RW  19  // Read/Write (R/W) (MUST BE LOW FOR WRITING)
+#define PIN_E   18  // Enable (E)
+#define PIN_RES 20  // Reset (RES)
+
+// 8-bit Data Bus
+#define PIN_DB0 16
+#define PIN_DB1 3
+#define PIN_DB2 4
+#define PIN_DB3 5
+#define PIN_DB4 6
+#define PIN_DB5 7
+#define PIN_DB6 8
+#define PIN_DB7 9
+
+// === Function: Initialize GPIO === //
+void gpio_setup() {
+    gpio_init(PIN_RS);
+    gpio_init(PIN_RW);
+    gpio_init(PIN_E);
+    gpio_init(PIN_RES);
+
+    gpio_set_dir(PIN_RS, GPIO_OUT);
+    gpio_set_dir(PIN_RW, GPIO_OUT);
+    gpio_set_dir(PIN_E, GPIO_OUT);
+    gpio_set_dir(PIN_RES, GPIO_OUT);
+
+    // Configure data bus as outputs
+int data_pins[] = {PIN_DB0, PIN_DB1, PIN_DB2, PIN_DB3, PIN_DB4, PIN_DB5, PIN_DB6, PIN_DB7};
+
+for (int i = 0; i < 8; i++) {
+    gpio_init(data_pins[i]);
+    gpio_set_dir(data_pins[i], GPIO_OUT);
+}
+
+    // Ensure initial states
+    gpio_put(PIN_RS, 0);
+    gpio_put(PIN_RW, 0);  // Always write mode
+    gpio_put(PIN_E, 0);
+}
+
+// === Function: Reset LCD === //
+void lcd_reset() {
+    gpio_put(PIN_RES, 0);
+    sleep_ms(10);
+    gpio_put(PIN_RES, 1);
+    sleep_ms(100);
+}
+
+// === Function: Write Data to LCD Bus === //
+void lcd_write_bus(uint8_t data) {
+    for (int i = 0; i < 8; i++) {
+        gpio_put(PIN_DB0 + i, (data >> i) & 1);
+    }
+}
+
+// === Function: Pulse Enable Signal === //
+void lcd_pulse_enable() {
+    gpio_put(PIN_E, 1);
+    sleep_us(50);
+    gpio_put(PIN_E, 0);
+    sleep_us(50);
+}
+
+// === Function: Send Command to LCD === //
+void lcd_send_command(uint8_t cmd) {
+    gpio_put(PIN_RS, 0);
+    gpio_put(PIN_RW, 0);
+    lcd_write_bus(cmd);
+    lcd_pulse_enable();
+    sleep_ms(2);
+}
+
+// === Function: Send Data to LCD === //
+void lcd_send_data(uint8_t data) {
+    gpio_put(PIN_RS, 1);
+    gpio_put(PIN_RW, 0);
+    lcd_write_bus(data);
+    lcd_pulse_enable();
+    sleep_ms(1);
+}
+
+// === Function: Initialize LCD === //
+void lcd_init() {
+    lcd_reset();
+    printf("[LCD] Initializing...\n");
+
+    lcd_send_command(0x30);
+    sleep_ms(10);
+
+    lcd_send_command(0x06);
+    sleep_ms(5);
+
+    lcd_send_command(0x36);  // ✅ Corrected: 8-bit, 4-line mode
+    sleep_ms(10);
+
+    lcd_send_command(0x09);
+    sleep_ms(5);
+
+    lcd_send_command(0x30);
+    sleep_ms(10);
+
+    lcd_send_command(0x0C);  // ✅ Display ON, Cursor OFF, No Blinking
+    sleep_ms(5);
+
+    lcd_send_command(0x01);
+    sleep_ms(10);
+
+    printf("[LCD] Initialization Complete!\n");
+}
+
+// === Function: Print a String to the LCD === //
+void lcd_print(const char *str) {
+    while (*str) {
+        lcd_send_data(*str++);
+    }
+}
+
+// === Main Function === //
+int main() {
+    stdio_init_all();
+    gpio_setup();
+    lcd_init();
+
+    // ✅ Corrected DDRAM Addressing
+    lcd_send_command(0x80 | 0x00); // Line 1
+    lcd_print("Hello, World!");
+
+    lcd_send_command(0x80 | 0x20); // Line 2
+    lcd_print("Pico LCD 8-bit");
+
+    lcd_send_command(0x80 | 0x40); // Line 3
+    lcd_print("Using RW1073");
+
+    lcd_send_command(0x80 | 0x60); // Line 4
+    lcd_print("Fixed Code!");
+
+    while (1) {
+        sleep_ms(1000);
+    }
+} 
