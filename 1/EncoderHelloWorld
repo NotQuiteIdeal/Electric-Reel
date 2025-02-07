@@ -1,0 +1,223 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/gpio.h"
+
+// === LCD Pin Definitions === //
+#define PIN_RS  17  
+#define PIN_RW  19  
+#define PIN_E   18  
+#define PIN_RES 20  
+
+// 8-bit Data Bus
+#define PIN_DB0 16
+#define PIN_DB1 3
+#define PIN_DB2 4
+#define PIN_DB3 5
+#define PIN_DB4 6
+#define PIN_DB5 7
+#define PIN_DB6 8
+#define PIN_DB7 9
+
+// Rotary Encoder Pins
+#define ENCODER_A 10  
+#define ENCODER_B 11  
+#define ENCODER_BTN 12  
+
+volatile int counter = 0;  
+volatile bool button_pressed = false;
+
+const int data_pins[8] = {PIN_DB0, PIN_DB1, PIN_DB2, PIN_DB3, PIN_DB4, PIN_DB5, PIN_DB6, PIN_DB7};
+
+// Quadrature state tracking
+volatile int oldVal = 0;
+volatile int newVal = 0;
+
+// === Function: Initialize GPIO === //
+void gpio_setup() {
+    // Initialize LCD control pins
+    int control_pins[] = {PIN_RS, PIN_RW, PIN_E, PIN_RES};
+    for (int i = 0; i < 4; i++) {
+        gpio_init(control_pins[i]);
+        gpio_set_dir(control_pins[i], GPIO_OUT);
+    }
+
+    // Initialize data bus pins
+    for (int i = 0; i < 8; i++) {
+        gpio_init(data_pins[i]);
+        gpio_set_dir(data_pins[i], GPIO_OUT);
+    }
+
+    // Rotary Encoder Pins
+    gpio_init(ENCODER_A);
+    gpio_set_dir(ENCODER_A, GPIO_IN);
+    gpio_pull_down(ENCODER_A);
+
+    gpio_init(ENCODER_B);
+    gpio_set_dir(ENCODER_B, GPIO_IN);
+    gpio_pull_down(ENCODER_B);
+
+    gpio_init(ENCODER_BTN);
+    gpio_set_dir(ENCODER_BTN, GPIO_IN);
+    gpio_pull_down(ENCODER_BTN);
+
+    // Default states
+    gpio_put(PIN_RS, 0);
+    gpio_put(PIN_RW, 0);
+    gpio_put(PIN_E, 0);
+
+    oldVal = (gpio_get(ENCODER_A) << 1) | gpio_get(ENCODER_B);
+}
+
+// === Function: Reset LCD === //
+void lcd_reset() {
+    gpio_put(PIN_RES, 0);
+    sleep_ms(50);
+    gpio_put(PIN_RES, 1);
+    sleep_ms(200);
+}
+
+// === Function: Write Data to LCD Bus === //
+void lcd_write_bus(uint8_t data) {
+    for (int i = 0; i < 8; i++) {
+        gpio_put(data_pins[i], (data >> i) & 1);
+    }
+}
+
+// === Function: Pulse Enable Signal === //
+void lcd_pulse_enable() {
+    gpio_put(PIN_E, 1);
+    sleep_us(200);
+    gpio_put(PIN_E, 0);
+    sleep_us(200);
+}
+
+// === Function: Send Command to LCD === //
+void lcd_send_command(uint8_t cmd) {
+    gpio_put(PIN_RS, 0);
+    gpio_put(PIN_RW, 0);
+    lcd_write_bus(cmd);
+    lcd_pulse_enable();
+    sleep_ms(2);
+}
+
+// === Function: Send Data to LCD === //
+void lcd_send_data(uint8_t data) {
+    gpio_put(PIN_RS, 1);
+    gpio_put(PIN_RW, 0);
+    lcd_write_bus(data);
+    lcd_pulse_enable();
+    sleep_ms(1);
+}
+
+// === Function: Initialize LCD === //
+void lcd_init() {
+    lcd_reset();
+    printf("[LCD] Initializing...\n");
+
+    lcd_send_command(0x30);
+    sleep_ms(10);
+    lcd_send_command(0x06);
+    sleep_ms(5);
+    lcd_send_command(0x36);
+    sleep_ms(10);
+    lcd_send_command(0x09);
+    sleep_ms(5);
+    lcd_send_command(0x30);
+    sleep_ms(10);
+    lcd_send_command(0x0C);
+    sleep_ms(5);
+    lcd_send_command(0x01);
+    sleep_ms(10);
+
+    printf("[LCD] Initialization Complete!\n");
+}
+
+// === Function: Print String to LCD === //
+void lcd_print(const char *str) {
+    while (*str) {
+        lcd_send_data(*str++);
+    }
+}
+
+// === Function: Update LCD with Encoder Counter and Button Status === //
+void update_lcd_display() {
+    char buffer[20];
+
+    // Update Line 1 with Encoder Count
+    sprintf(buffer, "Encoder: %d", counter);
+    lcd_send_command(0x80 | 0x00); // Move to Line 1
+    lcd_print("                "); // Clear line
+    lcd_send_command(0x80 | 0x00); // Move back to Line 1
+    lcd_print(buffer);
+
+    // Update Line 2 with Button Status
+    lcd_send_command(0x80 | 0x20); // Move to Line 2
+    lcd_print("                "); // Clear line
+    lcd_send_command(0x80 | 0x20); // Move back to Line 2
+    lcd_print(button_pressed ? "Button: Pressed" : "Button: Not Pressed");
+
+    printf("[LCD] Updated: %s | %s\n", buffer, button_pressed ? "Pressed" : "Not Pressed");
+}
+
+// === Function: Read Encoder State === //
+void read_encoder() {
+    int chanA = gpio_get(ENCODER_A);
+    int chanB = gpio_get(ENCODER_B);
+    
+    newVal = (chanA << 1) | chanB;
+    
+    if (newVal != oldVal) {
+        if ((oldVal == 0b00 && newVal == 0b01) || 
+            (oldVal == 0b01 && newVal == 0b11) || 
+            (oldVal == 0b11 && newVal == 0b10) || 
+            (oldVal == 0b10 && newVal == 0b00)) {
+            counter++;
+        } else if ((oldVal == 0b00 && newVal == 0b10) || 
+                   (oldVal == 0b10 && newVal == 0b11) || 
+                   (oldVal == 0b11 && newVal == 0b01) || 
+                   (oldVal == 0b01 && newVal == 0b00)) {
+            counter--;
+        }
+
+        printf("[ENCODER] Counter: %d\n", counter);
+        oldVal = newVal;
+        update_lcd_display();  // Update LCD when encoder changes
+    }
+}
+
+// === Function: Read Button State === //
+void read_button() {
+    if (gpio_get(ENCODER_BTN)) {
+        if (!button_pressed) {  // Avoid duplicate prints
+            printf("[BUTTON] Pressed!\n");
+            button_pressed = true;
+            update_lcd_display();
+        }
+    } else {
+        if (button_pressed) {  // Detect release
+            printf("[BUTTON] Released!\n");
+            button_pressed = false;
+            update_lcd_display();
+        }
+    }
+}
+
+// === Main Function === //
+int main() {
+    stdio_init_all();
+    sleep_ms(2000); // Wait for serial connection
+    printf("[SYSTEM] Starting...\n");
+
+    gpio_setup();
+    lcd_init();
+
+    // Initial LCD Display
+    update_lcd_display();
+
+    while (1) {
+        read_encoder();
+        read_button();
+        sleep_ms(5);
+    }
+}
