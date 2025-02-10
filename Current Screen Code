@@ -1,0 +1,178 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+
+#define I2C_PORT i2c0
+#define SDA_PIN 4
+#define SCL_PIN 5
+#define CFA634_I2C_ADDR 0x42  // I2C address (7-bit format)
+
+// Function to send a command to the LCD
+void cfa634_send_command(uint8_t cmd) {
+    uint8_t buffer[2] = {0xFE, cmd};  // Command format
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 2, false);
+
+    if (result < 0) {
+        printf("I2C ERROR: Failed to send command 0x%02X\n", cmd);
+    } else {
+        printf("I2C SUCCESS: Sent command 0x%02X\n", cmd);
+    }
+    sleep_ms(100);
+}
+void setcursor(uint8_t col, uint8_t row){
+    uint8_t buffer[3] = {0x11, col, row};
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 3, false);
+    sleep_ms(50);
+}
+void cfa634_print(const char *text, uint8_t col, uint8_t row) {
+    uint8_t display_width = 24; // CFA-634 is a 20-column display
+    size_t text_length = strlen(text);
+    // Ensure text fits within the display width
+    if (text_length > display_width) {
+        text_length = display_width; // Trim text if it's too long
+    }
+    // Calculate leading spaces needed
+    size_t leading_spaces = (display_width - text_length) / 2; // Center alignment
+    char padded_text[display_width + 1]; // +1 for null terminator
+    // Create the final string with spaces
+    snprintf(padded_text, sizeof(padded_text), "%*s%s", (int)leading_spaces, " ", text);
+    setcursor(col, row);
+    for (size_t i = 0; i < strlen(padded_text); i++) { // send padded number to display
+        i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, (uint8_t *)&padded_text[i], 1, false);
+        sleep_ms(2); // Small delay for LCD to process
+    }
+}
+
+
+// Function to initialize I2C
+void i2c_setup() {
+    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+}
+
+void cfa634_clear_screen() {
+    uint8_t clear_cmd = 0x0C;  // Form Feed (Control+L) in ASCII
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &clear_cmd, 1, false);
+
+    if (result < 0) {
+        printf("I2C ERROR: Failed to clear screen!\n");
+    } else {
+        printf("I2C SUCCESS: Screen cleared\n");
+    }
+
+    sleep_ms(3);  // Give LCD time to process
+}
+void settingsdisplay(int pos){
+    switch (pos) {
+        case 0:
+            cfa634_print(" >0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 1:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print(" >1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 2:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print(" >2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 3:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print(" >3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 4:
+            cfa634_print(" >4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 5:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print(" >5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 6:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print(" >6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 7:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print(" >7.RECALIBRATE DRAG",0,3);
+            break;
+        default:
+            cfa634_print(" >8.BUZZER TEST     ",0,0);
+            cfa634_print("                    ",0,1);
+            cfa634_print("                    ",0,2);
+            cfa634_print("                    ",0,3);
+            break;
+    }
+}
+void cfa634_main(int line, int drag) {
+    cfa634_print("   Main",0,0); // Line 1
+    if(line < 10){ // Line 2
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: 000%d FEET",line);
+        cfa634_print(formattedline,0,1);
+    } else if((line < 100)){
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: 00%d FEET",line);
+        cfa634_print(formattedline,0,1);
+    } else if((line < 1000)){
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: 0%d FEET",line);
+        cfa634_print(formattedline,0,1);
+    } else {
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: %d FEET",line);
+        cfa634_print(formattedline,0,1);
+    }
+    if(line < 10){ // Line 3
+        char formatteddrag[20];
+        sprintf(formatteddrag, "   DRAG: 0%d FT-LBS",drag);
+        cfa634_print(formatteddrag,0,1);
+    } else {
+        char formatteddrag[20];
+        sprintf(formatteddrag, "   DRAG: %d FT-LBS",drag);
+        cfa634_print(formatteddrag,0,2);
+    }
+    cfa634_print("  ",0,3); // Line 4
+}
+
+int main() {
+    stdio_init_all();
+    i2c_setup();
+
+    sleep_ms(500); // Wait for LCD to power up
+
+    cfa634_clear_screen();
+    int linelength = 0;
+    int dragset = 0;
+    int position = 0;
+    int button = 1;
+    if (button > 0){
+        settingsdisplay(position);
+    } else{
+        cfa634_main(linelength, dragset);
+    }
+    while (1) {
+        printf("Running...\n");
+        sleep_ms(1000);
+    }
+}
