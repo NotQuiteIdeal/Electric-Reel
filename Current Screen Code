@@ -162,7 +162,7 @@ int main() {
     sleep_ms(500); // Wait for LCD to power up
 
     cfa634_clear_screen();
-    // Temporarily values
+    // Temporary values
     int linelength = 0;
     int dragset = 0;
     int position = 0;
