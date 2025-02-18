@@ -1,0 +1,52 @@
+#include "pico/stdlib.h"
+#include "hardware/gpio.h"
+
+// Define encoder pins
+#define ENCODER_A 2
+#define ENCODER_B 3
+
+volatile int encoder_position = 0;  // Position of the encoder
+volatile bool encoder_direction = 0;  // 0 = counter-clockwise, 1 = clockwise
+
+// Interrupt service routine for encoder A
+void encoder_isr(uint gpio, uint32_t events) {
+    // Read the state of ENCODER_B to determine the direction
+    int B = gpio_get(ENCODER_B);  // Read the state of encoder B pin
+
+    if (B == 0) {
+        encoder_position++;  // Clockwise rotation
+        encoder_direction = 1;
+    } else {
+        encoder_position--;  // Counter-clockwise rotation
+        encoder_direction = 0;
+    }
+}
+
+int main() {
+    // Initialize stdio
+    stdio_init_all();
+
+    // Set up encoder A pin for input with pull-up
+    gpio_init(ENCODER_A);
+    gpio_set_dir(ENCODER_A, GPIO_IN);
+    gpio_pull_up(ENCODER_A);
+
+    // Set up encoder B pin for input with pull-up
+    gpio_init(ENCODER_B);
+    gpio_set_dir(ENCODER_B, GPIO_IN);
+    gpio_pull_up(ENCODER_B);
+
+    // Set up interrupt for encoder A pin
+    gpio_set_irq_enabled_with_callback(ENCODER_A, GPIO_IRQ_EDGE_FALL, true, &encoder_isr);
+
+    // Main loop
+    while (1) {
+        // Print the encoder position and direction
+        printf("Position: %d, Direction: %s\n", encoder_position, encoder_direction ? "Clockwise" : "Counter-clockwise");
+        
+        // Add a small delay to avoid excessive printing
+        sleep_ms(100);
+    }
+
+    return 0;
+}
