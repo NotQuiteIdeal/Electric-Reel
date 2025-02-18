@@ -1,0 +1,238 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+#include "hardware/timer.h"
+#include "hardware/gpio.h"
+#include "pico/multicore.h"
+
+#define I2C_PORT i2c0
+#define SDA_PIN 4
+#define SCL_PIN 5
+#define CFA634_I2C_ADDR 0x42  // I2C address (7-bit format)
+
+#define ENCODER_A 1
+#define ENCODER_B 0
+#define ENCODER_BTN 2
+
+volatile bool button_pressed = false;
+volatile uint32_t button_press_time = 0;
+volatile bool in_settings_menu = false;
+volatile int menu_index = 0;
+volatile int last_encoder_A = 0;
+volatile int last_encoder_B = 0;
+volatile int last_menu_index = 0;
+volatile int last_line = -1;
+volatile int last_drag = -1;
+
+// Function to send a command to the LCD
+void cfa634_send_command(uint8_t cmd) {
+    uint8_t buffer[2] = {0xFE, cmd};  // Command format
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 2, false);
+    sleep_ms(100);
+}
+
+void setcursor(uint8_t col, uint8_t row){
+    uint8_t buffer[3] = {0x11, col, row};
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 3, false);
+    sleep_ms(50);
+}
+
+void cfa634_print(const char *text, uint8_t col, uint8_t row) {
+    uint8_t display_width = 24; // CFA-634 is a 20-column display
+    size_t text_length = strlen(text);
+    if (text_length > display_width) {
+        text_length = display_width; // Trim text if it's too long
+    }
+    size_t leading_spaces = (display_width - text_length) / 2; // Center alignment
+    char padded_text[display_width + 1]; // +1 for null terminator
+    snprintf(padded_text, sizeof(padded_text), "%*s%s", (int)leading_spaces, " ", text);
+    setcursor(col, row);
+    for (size_t i = 0; i < strlen(padded_text); i++) { // send padded number to display
+        i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, (uint8_t *)&padded_text[i], 1, false);
+        sleep_ms(2); // Small delay for LCD to process
+    }
+}
+
+void i2c_setup() {
+    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+}
+
+void encoder_button_isr(uint gpio, uint32_t events) {
+    if (gpio == ENCODER_BTN){
+        sleep_ms(50);
+        if (!gpio_get(ENCODER_BTN)) {
+            button_pressed = true;
+        }
+    }
+}
+
+void encoder_setup() {
+    gpio_init(ENCODER_A);
+    gpio_set_dir(ENCODER_A, GPIO_IN);
+    gpio_pull_up(ENCODER_A);
+    gpio_init(ENCODER_B);
+    gpio_set_dir(ENCODER_B, GPIO_IN);
+    gpio_pull_up(ENCODER_B);
+    gpio_init(ENCODER_BTN);
+    gpio_set_dir(ENCODER_BTN, GPIO_IN);
+    gpio_pull_down(ENCODER_BTN);
+
+    gpio_set_irq_enabled_with_callback(ENCODER_BTN, GPIO_IRQ_EDGE_FALL, true, &encoder_button_isr);
+}
+
+void cfa634_clear_screen() {
+    uint8_t clear_cmd = 0x0C;  // Form Feed (Control+L) in ASCII
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &clear_cmd, 1, false);
+    sleep_ms(3);  // Give LCD time to process
+}
+
+void settingsdisplay(int pos){
+    switch (pos) {
+        case 0:
+            cfa634_print(" >0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 1:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print(" >1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 2:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print(" >2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 3:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print(" >3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 4:
+            cfa634_print(" >4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 5:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print(" >5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 6:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print(" >6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 7:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print(" >7.RECALIBRATE DRAG",0,3);
+            break;
+        case 8:
+            cfa634_print(" >8.BUZZER TEST     ",0,0);
+            cfa634_print("                    ",0,1);
+            cfa634_print("                    ",0,2);
+            cfa634_print("                    ",0,3);
+            break;
+        default: break;
+    }
+}
+
+void cfa634_main(int line, int drag) {
+    cfa634_clear_screen();
+    cfa634_print("   MAIN",0,0); // Line 1
+    char formattedline[20];
+    sprintf(formattedline, "   LINE: %d FEET", line);
+    cfa634_print(formattedline,0,1);
+    sprintf(formattedline, "   DRAG: %d FT-LBS", drag);
+    cfa634_print(formattedline,0,2);
+    cfa634_print("  ",0,3); // Line 4
+}
+
+void read_encoder() {
+    static uint32_t last_time = 0;
+    uint32_t current_time = time_us_32();
+
+    if (current_time - last_time < 10000) {
+        return;
+    }
+    
+    int A = gpio_get(ENCODER_A);
+    if (A != last_encoder_A && A == 1) {
+        int B = gpio_get(ENCODER_B);
+        if (B == 0) {
+            menu_index++;
+        } else {
+            menu_index--;
+        }
+        
+        if (menu_index < 0) menu_index = 0;
+        if (menu_index > 8) menu_index = 8;
+        
+        settingsdisplay(menu_index);
+        last_time = current_time;
+    }
+    last_encoder_A = A;
+}
+
+void check_encoder() {
+    if (gpio_get(ENCODER_BTN)) {
+        if (!button_pressed) {
+            button_pressed = true;
+            button_press_time = to_ms_since_boot(get_absolute_time());
+        } else if (to_ms_since_boot(get_absolute_time()) - button_press_time > 3000) {
+            in_settings_menu = true;
+            menu_index = 0;
+            settingsdisplay(menu_index);
+        }
+    }
+}
+
+void refresh_display(uint8_t linelen, uint8_t setdrag) {
+    if (gpio_get(ENCODER_BTN)) {  // If the button is pressed
+        sleep_ms(50); // Debounce
+        if (gpio_get(ENCODER_BTN)) { // Ensure the button is still pressed
+            in_settings_menu = !in_settings_menu; // Toggle settings menu state
+            sleep_ms(200); // Wait to avoid multiple toggles from a single press
+        }
+    }
+    if (in_settings_menu) {
+        read_encoder();
+    } else {
+        check_encoder();
+        if (linelen != last_line || setdrag != last_drag) {
+            cfa634_clear_screen();
+            cfa634_main(linelen, setdrag); // Display main screen with updated values
+            last_line = linelen;
+            last_drag = setdrag;
+        }
+    }
+}
+
+int main() {
+    stdio_init_all();
+    i2c_setup();
+    encoder_setup();
+    sleep_ms(500); // Wait for LCD to power up
+    cfa634_clear_screen();
+    int linelength = 0;
+    int dragset = 0;
+    
+    while (1) {
+        refresh_display(linelength, dragset);
+        sleep_ms(100);
+    }
+}
