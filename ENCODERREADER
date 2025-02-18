@@ -2,8 +2,8 @@
 #include "hardware/gpio.h"
 
 // Define encoder pins
-#define ENCODER_A 2
-#define ENCODER_B 3
+#define ENCODER_A 1
+#define ENCODER_B 0
 
 volatile int encoder_position = 0;  // Position of the encoder
 volatile bool encoder_direction = 0;  // 0 = counter-clockwise, 1 = clockwise
