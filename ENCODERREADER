@@ -1,5 +1,7 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
+#include <stdio.h>
+
 
 // Define encoder pins
 #define ENCODER_A 1
