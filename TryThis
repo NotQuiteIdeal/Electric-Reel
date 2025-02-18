@@ -1,0 +1,50 @@
+#include "pico/stdlib.h"
+#include <stdio.h>
+
+// Define encoder pins
+#define ENCODER_A 1
+#define ENCODER_B 0
+
+volatile int encoder_position = 0;
+volatile int last_encoder_A = 0;
+
+void read_encoder() {
+    int A = gpio_get(ENCODER_A);
+    
+    if (A != last_encoder_A && A == 1) { // Detect rising edge
+        int B = gpio_get(ENCODER_B);
+        
+        if (B == 0) {
+            encoder_position++; // Clockwise
+        } else {
+            encoder_position--; // Counter-clockwise
+        }
+
+        printf("Encoder Position: %d\n", encoder_position);
+    }
+
+    last_encoder_A = A;
+}
+
+int main() {
+    stdio_init_all();
+    sleep_ms(2000);  // Give time for the serial monitor to connect
+
+    printf("Starting Encoder Test...\n");
+
+    // Initialize Encoder Pins
+    gpio_init(ENCODER_A);
+    gpio_set_dir(ENCODER_A, GPIO_IN);
+    gpio_pull_up(ENCODER_A);
+
+    gpio_init(ENCODER_B);
+    gpio_set_dir(ENCODER_B, GPIO_IN);
+    gpio_pull_up(ENCODER_B);
+
+    while (1) {
+        read_encoder();
+        sleep_ms(1); // Small delay to prevent excessive CPU usage
+    }
+
+    return 0;
+}
