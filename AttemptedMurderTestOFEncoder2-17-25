@@ -152,13 +152,39 @@ void settingsdisplay(int pos){
 }
 
 void cfa634_main(int line, int drag) {
-    cfa634_clear_screen();
+   cfa634_clear_screen();
     cfa634_print("   MAIN",0,0); // Line 1
-    char formattedline[20];
-    sprintf(formattedline, "   LINE: %d FEET", line);
-    cfa634_print(formattedline,0,1);
-    sprintf(formattedline, "   DRAG: %d FT-LBS", drag);
-    cfa634_print(formattedline,0,2);
+    if(line < 10){ // Line 2
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: 000%d FEET",line);
+        cfa634_print(formattedline,0,1);
+    } else if((line < 100)){
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: 00%d FEET",line);
+        cfa634_print(formattedline,0,1);
+    } else if((line < 1000)){
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: 0%d FEET",line);
+        cfa634_print(formattedline,0,1);
+    } else {
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: %d FEET",line);
+        cfa634_print(formattedline,0,1);
+    }
+    if(drag < 10){ // Line 3
+        char formatteddrag[20];
+        sprintf(formatteddrag, "   DRAG: 00%d FT-LBS",drag);
+        cfa634_print(formatteddrag,0,1);
+    } else  if (drag <100){
+        char formatteddrag[20];
+        sprintf(formatteddrag, "   DRAG: 0%d FT-LBS",drag);
+        cfa634_print(formatteddrag,0,2);
+    }
+    else  {
+        char formatteddrag[20];
+        sprintf(formatteddrag, "   DRAG: %d FT-LBS",drag);
+        cfa634_print(formatteddrag,0,2);
+    }
     cfa634_print("  ",0,3); // Line 4
 }
 
