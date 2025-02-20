@@ -154,7 +154,7 @@ void display_main_screen() {
 // Each option is printed on one line; the selected option is indicated with a "<" cursor at the right edge.
 void display_settings_menu(int index) {
     const char *menu_items[] = {
-        "1.Reel Up Speed",    // Adjust reel speed in %.
+        "1.Reel-Up Speed",    // Adjust reel speed in %.
         "2.Auto Stop Length", // Adjust stop length in FT.
         "3.Metric/Imperial",  // Toggle display units.
         "4.Turn off Alarm",   // Enable/disable alarm.
@@ -394,7 +394,7 @@ void handle_buttons() {
     if (gpio_get(BUTTON_15)) {
         if (button_15_press_time == 0 && button_15_released) {
             button_15_press_time = to_ms_since_boot(get_absolute_time());
-        } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 2500 && !led_27_on) {
+        } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 3000 && !led_27_on) {
             gpio_put(LED_27, 1);  // Turn on LED_27 after 3 seconds.
             led_27_on = true;
             button_15_released = false;
