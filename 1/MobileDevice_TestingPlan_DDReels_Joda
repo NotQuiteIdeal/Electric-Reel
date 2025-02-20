@@ -4,9 +4,9 @@
 #include "hardware/gpio.h"
 
 // === LCD Pin Definitions === //
-// The LCD module (4x20 display) uses a controller similar to the HD44780, but in our case
-// our module is built around the RW1073 driver/controller. For pin details and initialization,
-// see MobileDevice_LCD_Joda (1).pdf :contentReference[oaicite:4]{index=4} and RW1073 datasheet :contentReference[oaicite:5]{index=5}.
+// The LCD module (4x20 display) uses a controller similar to the HD44780,
+// but our module is built around the RW1073 driver/controller. For pin details and initialization,
+// see MobileDevice_LCD_Joda.pdf :contentReference[oaicite:4]{index=4} and RW1073 datasheet :contentReference[oaicite:5]{index=5}.
 #define PIN_RS  17    // Register Select pin; low for command, high for data.
 #define PIN_RW  19    // Read/Write control; low for write.
 #define PIN_E   18    // Enable pin: triggers data read/write on falling edge.
@@ -52,8 +52,6 @@ volatile bool in_submenu = false;
 
 // Global parameter variables (user-adjustable settings)
 // These values are used in subpages for adjusting reel speed, stop length, etc.
-// The PEC11 encoder supports up to 60 RPM (see MobileDevice_Encoder_Joda.pdf :contentReference[oaicite:7]{index=7}),
-// and our design uses steps that suit our application.
 int reel_speed = 50;       // Reel up speed percentage (0 to 100%), in steps of 10.
 int stop_length = 10;      // Auto stop length in feet (0 to 100 FT), in steps of 1.
 bool metric_mode = false;  // Display mode: false = Imperial, true = Metric.
@@ -126,17 +124,18 @@ void lcd_print(const char *str) {
     }
 }
 
+// Prints a string to the LCD at the current cursor position (starting at column 0 of the given line).
+void lcd_print_normal(const char *str, uint8_t line) {
+    uint8_t ddram_address = (line - 1) * 0x20;
+    lcd_send_command(0x80 | ddram_address);
+    lcd_print(str);
+}
+
 // Prints a string centered on a given line (1-4) on the LCD.
 // Uses the 4x20 or similar display dimensions (as per MobileDevice_LCD_Joda :contentReference[oaicite:11]{index=11}).
 void lcd_print_centered(const char *str, uint8_t line) {
     uint8_t start_pos = (20 - strlen(str)) / 2;
-    uint8_t ddram_address = 0x00;
-    switch (line) {
-        case 1: ddram_address = 0x00 + start_pos; break;
-        case 2: ddram_address = 0x20 + start_pos; break;
-        case 3: ddram_address = 0x40 + start_pos; break;
-        case 4: ddram_address = 0x60 + start_pos; break;
-    }
+    uint8_t ddram_address = (line - 1) * 0x20 + start_pos;
     lcd_send_command(0x80 | ddram_address);
     lcd_print(str);
 }
@@ -146,15 +145,14 @@ void lcd_print_centered(const char *str, uint8_t line) {
 void display_main_screen() {
     lcd_send_command(0x01);  // Clear Display.
     lcd_print_centered("MAIN SCREEN", 1);
-    lcd_print_centered("0000 FEET", 2);
-    lcd_print_centered("00 FT LBS", 3);
+    lcd_print_centered("0005 FEET", 2);
+    lcd_print_centered("05 FT LBS", 3);
     printf("[LCD] Main Screen Displayed.\n");
 }
 
 // Displays the settings menu.
 // Each option is printed on one line; the selected option is indicated with a "<" cursor at the right edge.
 void display_settings_menu(int index) {
-    // List of settings options; see user requirements.
     const char *menu_items[] = {
         "1.Reel Up Speed",    // Adjust reel speed in %.
         "2.Auto Stop Length", // Adjust stop length in FT.
@@ -171,8 +169,7 @@ void display_settings_menu(int index) {
         if (start_index + i < 5) {
             lcd_print(menu_items[start_index + i]);
             if (start_index + i == index) {
-                // Print selection indicator at column 20 (last column).
-                lcd_send_command(0x80 | ((i * 0x20) + 19));  
+                lcd_send_command(0x80 | ((i * 0x20) + 19));  // Print selection indicator at column 20.
                 lcd_print("<");
             }
         }
@@ -181,34 +178,34 @@ void display_settings_menu(int index) {
 }
 
 // --- Subpage Functionality --- //
-// Opens a subpage for the selected setting. The subpage shows details
-// for adjusting that particular parameter. For instance, for "Reel Up Speed" the
-// subpage shows "Speed percentage" and a placeholder for the value.
-// This display is based on typical LCD module layouts from MobileDevice_LCD_Joda :contentReference[oaicite:12]{index=12}.
+// Opens a subpage for the selected setting. For options 0-3, a subpage is used for editing.
+// For option 5 ("Save Settings" corresponding to menu_index == 4), we immediately save without opening a subpage.
 void open_subpage(int selection) {
     in_submenu = true;
-    lcd_send_command(0x01); // Clear display
-
+    lcd_send_command(0x01); // Clear display.
     switch(selection) {
         case 0:
-            lcd_print_centered("Speed percentage", 1);
-            lcd_print_centered("---%", 2);
+            lcd_print_centered("Reel-Up Speed", 1);
+            lcd_print_centered("20%", 2);
+            lcd_print_normal("Press to Return.", 4);
             break;
         case 1:
-            lcd_print_centered("Stop Length", 1);
-            lcd_print_centered("-- FT", 2);
+            lcd_print_centered("Auto Stop Length", 1);
+            lcd_print_centered("5 FT", 2);
+            lcd_print_normal("Press to Return.", 4);
             break;
         case 2:
             lcd_print_centered("Metric/Imperial", 1);
-            lcd_print_centered("Current: ?", 2);
+            lcd_print_centered("Current: Imperial", 2);
+            lcd_print_normal("Press to Return.", 4);
             break;
         case 3:
             lcd_print_centered("Turn off Alarm", 1);
-            lcd_print_centered("Press to toggle", 2);
+            lcd_print_centered("Current: Alarm On", 2);
+            lcd_print_normal("Press to Return.", 4);
             break;
         case 4:
-            lcd_print_centered("Save Settings", 1);
-            lcd_print_centered("Confirm?", 2);
+            // For Save Settings, we do not open a subpage.
             break;
         default:
             lcd_print_centered("Undefined", 1);
@@ -218,91 +215,80 @@ void open_subpage(int selection) {
 }
 
 // --- Check Encoder Button in Settings/Subpage --- //
-// In settings menu, a short press of the encoder button opens the subpage.
-// The ignore_next_press flag (set on entering settings) prevents immediate re-entry.
-void check_settings_selection() {
+// When the encoder button is pressed in the settings menu, we check if it's a short press.
+// If the current menu option is "Save Settings" (menu_index == 4), then a short press immediately saves
+// and returns to the main screen. Otherwise, a short press opens the corresponding subpage.
+void check_settings_selection(void) {
     static bool was_pressed = false;
     static uint32_t press_time = 0;
-    bool current = !gpio_get(ENCODER_BTN); // Button is active low.
-
+    bool current = !gpio_get(ENCODER_BTN); // Button active low.
     if (ignore_next_press) {
-        if (gpio_get(ENCODER_BTN)) { // Wait until button is released.
+        if (gpio_get(ENCODER_BTN))
             ignore_next_press = false;
-        }
         return;
     }
-
     if (current && !was_pressed) {
-        // Button press detected; record time.
         press_time = to_ms_since_boot(get_absolute_time());
         was_pressed = true;
     } else if (!current && was_pressed) {
         uint32_t duration = to_ms_since_boot(get_absolute_time()) - press_time;
         if (duration < 3000) {
-            // Short press: open subpage for the selected setting.
-            open_subpage(menu_index);
+            if (menu_index == 4) {
+                // For "Save Settings", immediately save and return to main screen.
+                printf("[SAVE] Settings saved: Speed=%d%%, Length=%dFT, Mode=%s, Alarm=%s\n",
+                       reel_speed, stop_length,
+                       metric_mode ? "Metric" : "Imperial",
+                       alarm_enabled ? "ON" : "OFF");
+                in_settings_menu = false;
+                lcd_send_command(0x01);  // Clear Display.
+                lcd_print_centered("Saving...", 2);
+                sleep_ms(1000);
+                display_main_screen();
+                printf("[SAVE] Returned to main screen after saving.\n");
+            } else {
+                open_subpage(menu_index);
+            }
         }
         was_pressed = false;
     }
 }
 
-// --- Check Encoder Button in Subpage --- //
-// In a subpage, if the user is on the "Save Settings" confirm screen (menu_index==4),
-// a short press saves settings and returns to the main screen.
-// Otherwise, a short press exits the subpage and returns to the settings menu.
-void check_submenu_exit() {
+// In a subpage for options 0-3, a short press on the encoder button returns to the settings menu.
+void check_submenu_exit(void) {
     static bool was_pressed = false;
     static uint32_t press_time = 0;
-    bool current = !gpio_get(ENCODER_BTN); // active low
-
+    bool current = !gpio_get(ENCODER_BTN); // Active low.
     if (current && !was_pressed) {
         press_time = to_ms_since_boot(get_absolute_time());
         was_pressed = true;
     } else if (!current && was_pressed) {
         uint32_t duration = to_ms_since_boot(get_absolute_time()) - press_time;
-        if (menu_index == 4) {
-            // On the Save Settings screen, any short press saves settings and returns to main.
-            printf("[SAVE] Settings saved: Speed=%d%%, Length=%dFT, Mode=%s, Alarm=%s\n",
-                   reel_speed, stop_length,
-                   metric_mode ? "Metric" : "Imperial",
-                   alarm_enabled ? "ON" : "OFF");
+        if (duration < 3000) {
             in_submenu = false;
-            in_settings_menu = false;
-            display_main_screen();
-            printf("[SUBPAGE] Exiting Save Settings subpage to main screen.\n");
+            display_settings_menu(menu_index);
+            last_menu_index = menu_index;
+            printf("[SUBPAGE] Exiting subpage.\n");
         } else {
-            // For other subpages, a short press exits the subpage and returns to settings.
-            if (duration < 3000) {
-                in_submenu = false;
-                display_settings_menu(menu_index);
-                last_menu_index = menu_index;
-                printf("[SUBPAGE] Exiting subpage.\n");
-            } else {
-                in_submenu = false;
-                display_settings_menu(menu_index);
-                last_menu_index = menu_index;
-                printf("[SUBPAGE] Exiting subpage via long press.\n");
-            }
+            in_submenu = false;
+            display_settings_menu(menu_index);
+            last_menu_index = menu_index;
+            printf("[SUBPAGE] Exiting subpage via long press.\n");
         }
         was_pressed = false;
     }
 }
 
 // --- Rotary Encoder Interrupt Callback --- //
-// When not in a subpage, encoder rotations update the menu_index in the settings menu.
-// When in a subpage for numeric parameters (menu_index 0 or 1), rotations adjust the parameter values.
-// The logic here is simple edge detection using flags.
+// When not in a subpage, encoder rotations update the settings menu selection.
+// In a subpage for numeric options (menu_index 0 or 1), rotations adjust the parameter values.
 void encoder_callback(uint gpio, uint32_t events) {
-    // Read encoder channels A and B from the GPIO state.
     uint32_t gpio_state = (gpio_get_all() >> 10) & 0b11;
-
     if (!in_submenu) {
-        // In settings menu mode.
         if (gpio == ENCODER_A) {
             if (!cw_fall && (gpio_state == 0b10)) {
                 cw_fall = true;
             }
-            if (ccw_fall && (gpio_state == 0b00)) {  // Counter-clockwise detected.
+            if (ccw_fall && (gpio_state == 0b00)) {
                 ccw_fall = false;
                 cw_fall = false;
                 menu_index--;
@@ -313,7 +299,7 @@ void encoder_callback(uint gpio, uint32_t events) {
             if (!ccw_fall && (gpio_state == 0b01)) {
                 ccw_fall = true;
             }
-            if (cw_fall && (gpio_state == 0b00)) {  // Clockwise detected.
+            if (cw_fall && (gpio_state == 0b00)) {
                 cw_fall = false;
                 ccw_fall = false;
                 menu_index++;
@@ -322,7 +308,6 @@ void encoder_callback(uint gpio, uint32_t events) {
             }
         }
     } else {
-        // In subpage mode: For numeric subpages (0 and 1), encoder rotations adjust the parameter.
         if (menu_index == 0 || menu_index == 1) {
             if (gpio == ENCODER_A) {
                 if (!cw_fall && (gpio_state == 0b10)) {
@@ -332,18 +317,16 @@ void encoder_callback(uint gpio, uint32_t events) {
                     ccw_fall = false;
                     cw_fall = false;
                     if (menu_index == 0) {
-                        // Decrease reel speed by 10%.
                         reel_speed -= 10;
                         if (reel_speed < 0) reel_speed = 0;
                     } else if (menu_index == 1) {
-                        // Decrease stop length by 1 ft.
                         stop_length -= 1;
                         if (stop_length < 0) stop_length = 0;
                     }
                     printf("[SUBPAGE] Updated (CCW) - ");
                     if (menu_index == 0)
                         printf("Speed: %d%%\n", reel_speed);
-                    else if (menu_index == 1)
+                    else
                         printf("Length: %d FT\n", stop_length);
                 }
             } else if (gpio == ENCODER_B) {
@@ -354,29 +337,27 @@ void encoder_callback(uint gpio, uint32_t events) {
                     cw_fall = false;
                     ccw_fall = false;
                     if (menu_index == 0) {
-                        // Increase reel speed by 10%.
                         reel_speed += 10;
                         if (reel_speed > 100) reel_speed = 100;
                     } else if (menu_index == 1) {
-                        // Increase stop length by 1 ft.
                         stop_length += 1;
                         if (stop_length > 100) stop_length = 100;
                     }
                     printf("[SUBPAGE] Updated (CW) - ");
                     if (menu_index == 0)
                         printf("Speed: %d%%\n", reel_speed);
-                    else if (menu_index == 1)
+                    else
                         printf("Length: %d FT\n", stop_length);
                 }
             }
         }
-        // For other subpages (toggles and Save), encoder rotations are not used.
+        // For other subpages (options 2, 3, and 4), encoder rotations are not used.
     }
 }
 
 // --- Check Button for Long Press to Enter Settings --- //
 // Outside of settings mode, a long press of the encoder button enters the settings menu.
-void check_button_long_press() {
+void check_button_long_press(void) {
     if (!in_settings_menu && !gpio_get(ENCODER_BTN)) { // Button active low.
         if (!button_pressed) {
             button_pressed = true;
@@ -386,7 +367,7 @@ void check_button_long_press() {
             menu_index = 0;
             display_settings_menu(menu_index);
             last_menu_index = menu_index;
-            ignore_next_press = true; // Ignore the next press to prevent immediate selection.
+            ignore_next_press = true; // Prevent immediate subpage open.
             printf("[SETTINGS] Entering settings menu via long press.\n");
         }
     } else if (gpio_get(ENCODER_BTN)) {
@@ -413,7 +394,7 @@ void handle_buttons() {
     if (gpio_get(BUTTON_15)) {
         if (button_15_press_time == 0 && button_15_released) {
             button_15_press_time = to_ms_since_boot(get_absolute_time());
-        } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 3000 && !led_27_on) {
+        } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 2500 && !led_27_on) {
             gpio_put(LED_27, 1);  // Turn on LED_27 after 3 seconds.
             led_27_on = true;
             button_15_released = false;
@@ -432,9 +413,7 @@ void handle_buttons() {
 }
 
 // --- GPIO Setup --- //
-// Initialize all GPIO pins used by the LCD, encoder, and buttons.
-// For the Pico W (RP2040) please refer to pico-w-datasheet (1) (1).pdf :contentReference[oaicite:13]{index=13} for I/O voltage and pin limitations.
-void gpio_setup() {
+void gpio_setup(void) {
     int control_pins[] = {PIN_RS, PIN_RW, PIN_E, PIN_RES};
     for (int i = 0; i < 4; i++) {
         gpio_init(control_pins[i]);
@@ -478,7 +457,7 @@ void gpio_setup() {
     gpio_put(LED_27, 0);
 }
 
-int main() {
+int main(void) {
     stdio_init_all();
     sleep_ms(2000);
     printf("[SYSTEM] Starting...\n");
@@ -490,7 +469,7 @@ int main() {
         if (!in_settings_menu) {
             check_button_long_press();
         }
-        // In settings mode: if in a subpage, check for exit, otherwise check for subpage entry.
+        // In settings mode: if in a subpage, check for exit; otherwise, check for subpage entry.
         if (in_settings_menu) {
             if (in_submenu) {
                 check_submenu_exit();
