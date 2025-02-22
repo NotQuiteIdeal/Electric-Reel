@@ -4,16 +4,17 @@
  * Project: Dynamic Drag Reels (D.D. Reels)
  * Author: Gabriel Joda
  * Platform: Raspberry Pi Pico W
- * Purpose: This is the third iteration of the SPI communication code for the EA DIP205-6 LCD (RW1073 Controller).
- *          This version introduces debugging output via `printf()` to monitor commands and data sent to the LCD.
+ * Purpose: This is the fourth iteration of the SPI communication code for the EA DIP205-6 LCD (RW1073 Controller).
+ *          In this version, the busy flag check has been removed, and instead, fixed delays are used after each command
+ *          and data transmission to ensure stability.
  *
- *          The code initializes SPI communication, performs hardware reset, and attempts to write to the 4x20 character LCD.
- *          Like the previous iteration, it includes a busy flag check before sending commands to improve reliability.
+ *          The code initializes SPI communication, performs hardware reset, and writes data to the 4x20 character LCD.
+ *          This approach simplifies execution but may require fine-tuning of delay times for better performance.
  *
- *          However, **this iteration still does not work correctly**. Issues may be related to the SPI read operation used for the
- *          busy flag check or timing mismatches in command execution. Debugging output should help identify the issue.
+ *          While debugging output (`printf()`) remains to monitor command and data transmission, **this iteration's effectiveness
+ *          is still unverified** and may need further refinement to ensure consistent display operation.
  *
- * Status: This code does not work as intended. Debugging required.
+ * Status: Requires testing to determine stability and responsiveness.
  * ----------------------------------------------------
  */
 
@@ -23,7 +24,6 @@
 
 // SPI Pins
 #define SPI_PORT spi0
-#define PIN_MISO 16  // SOD (Slave Out)
 #define PIN_CS   17  // Chip Select
 #define PIN_SCLK 18  // Clock
 #define PIN_MOSI 19  // Data (SID)
@@ -37,41 +37,26 @@
 #define CMD_FUNCTION    0x30
 #define CMD_EXT_FUNCTION 0x36
 
-// Busy Flag Check
-bool lcd_is_busy() {
-    uint8_t cmd = 0x00;  // Read BF + Address
-    uint8_t response;
-    
-    gpio_put(PIN_CS, 0);
-    spi_write_read_blocking(SPI_PORT, &cmd, &response, 1);
-    gpio_put(PIN_CS, 1);
-    
-    return (response & 0x80);  // BF is bit 7
-}
-
-void lcd_wait() {
-    while(lcd_is_busy()) { 
-        sleep_us(100); 
-    }
-}
-
+// Send a command to the LCD
 void lcd_command(uint8_t cmd) {
-    lcd_wait();
-    gpio_put(PIN_CS, 0);
+    gpio_put(PIN_CS, 0);  // Select LCD
     spi_write_blocking(SPI_PORT, &cmd, 1);
-    gpio_put(PIN_CS, 1);
+    gpio_put(PIN_CS, 1);  // Deselect LCD
+    sleep_ms(2);          // Fixed delay instead of Busy Flag
     printf("Command sent: 0x%02X\n", cmd);
 }
 
+// Send data to the LCD
 void lcd_data(uint8_t data) {
-    lcd_wait();
-    gpio_put(PIN_CS, 0);
-    uint8_t packet = data | 0x40;  // RS=1
+    gpio_put(PIN_CS, 0);  // Select LCD
+    uint8_t packet = data | 0x40;  // RS=1 for data
     spi_write_blocking(SPI_PORT, &packet, 1);
-    gpio_put(PIN_CS, 1);
+    gpio_put(PIN_CS, 1);  // Deselect LCD
+    sleep_ms(1);          // Fixed delay instead of Busy Flag
     printf("Data sent: 0x%02X\n", data);
 }
 
+// Initialize the LCD
 void lcd_init() {
     // Hardware Reset
     gpio_init(PIN_RES);
@@ -83,7 +68,6 @@ void lcd_init() {
 
     // SPI Configuration
     spi_init(SPI_PORT, 100000);  // 100kHz clock
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCLK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
 
@@ -107,6 +91,12 @@ int main() {
     stdio_init_all();
     printf("Initializing LCD...\n");
 
+    // Initialize CS pin
+    gpio_init(PIN_CS);
+    gpio_set_dir(PIN_CS, GPIO_OUT);
+    gpio_put(PIN_CS, 1);  // Deselect LCD by default
+
+    // Initialize LCD
     lcd_init();
     printf("LCD Initialized.\n");
 
