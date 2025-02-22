@@ -1,3 +1,23 @@
+/*
+ * ----------------------------------------------------
+ * DDReels Mobile Device - Encoder-Based Settings Navigation
+ * Project: Dynamic Drag Reels (D.D. Reels)
+ * Author: Gabriel Joda
+ * Platform: Raspberry Pi Pico W
+ * Purpose: Implements rotary encoder-driven settings navigation.
+ *
+ *          Key Features:
+ *            - **Rotary encoder controls menu selection** via interrupts.
+ *            - **Debounce logic** added for **smooth, glitch-free movement.**
+ *            - **Long press detection** for **entering and exiting settings menu.**
+ *            - **LCD updates only when necessary** to improve efficiency.
+ *            - **LED feedback system** responds to button presses.
+ *            - **Subsettings**.
+ *
+ *          Status: ✅ Fully functional
+ * ----------------------------------------------------
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
