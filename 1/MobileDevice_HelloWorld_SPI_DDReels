@@ -4,131 +4,133 @@
  * Project: Dynamic Drag Reels (D.D. Reels)
  * Author: Gabriel Joda
  * Platform: Raspberry Pi Pico W
- * Purpose: This is the seventh iteration of the SPI communication code for the EA DIP205-6 LCD (RW1073 Controller).
- *          This version introduces SEGRAM clearing for icon reset, fine-tunes the initialization sequence,
- *          and provides enhanced debugging messages for easier troubleshooting.
+ * Purpose: This is the eighth iteration of the SPI communication code for the EA DIP205-6 LCD (RW1073 Controller).
+ *          This version introduces a 3-byte SPI packet format for command and data transmission and implements a busy flag check
+ *          before executing LCD commands to improve reliability.
  *
  *          Key improvements in this iteration:
- *            - Implemented SEGRAM clearing to reset stored icons.
- *            - Adjusted initialization sequence for better RW1073 compatibility.
- *            - Improved debugging messages to track LCD state transitions.
- *            - Maintained 270kHz SPI clock for stable communication.
+ *            - Introduced a 3-byte SPI transmission format (lower and upper nibbles split)
+ *            - Implemented `lcd_check_busy()` to poll the LCD's busy flag before sending commands
+ *            - Improved initialization sequence for enhanced compatibility with the RW1073 controller
+ *            - SEGRAM clearing added for proper icon reset
+ *            - Refined LCD printing function to check readiness before sending data
  *
- *          This version aims to enhance display consistency and ensure correct initialization.
- *          Further testing is required to validate display persistence across multiple power cycles.
+ *          This version aims to ensure stable SPI communication and prevent premature command execution.
+ *          Further validation is needed to confirm operational consistency under various conditions.
  *
- * Status: Requires additional testing for long-term display stability.
+ * Status: Requires additional real-world testing for reliability.
  * ----------------------------------------------------
  */
 
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
-#include <string.h>
 
 // === SPI Pin Definitions === //
 #define SPI_PORT spi0
-#define PIN_MISO 16  // SOD (Slave Out)
-#define PIN_CS   17  // Chip Select (CS) - Active Low
-#define PIN_SCLK 18  // SPI Clock (SCLK)
+#define PIN_CS   17  // Chip Select (Active Low)
+#define PIN_SCLK 18  // SPI Clock
 #define PIN_MOSI 19  // SPI Data Out (MOSI / SID)
-#define PIN_RES  22  // Reset (RES) - Active Low
+#define PIN_RES  22  // Reset (Active Low)
 
 // === RW1073 LCD Commands === //
-#define CMD_FUNCTION_SET     0x30  // Function set, wait >39us
-#define CMD_ENTRY_MODE_SET   0x07  // Entry Mode Set
-#define CMD_EXT_FUNCTION_SET 0x36  // Extended function set (for 4-line mode)
-#define CMD_DISPLAY_CONTROL  0x0F  // Display ON, Cursor ON
-#define CMD_CLEAR_DISPLAY    0x01  // Clear display, wait >1.53ms
-#define CMD_SET_DDRAM_ADDR   0x80  // Set DDRAM address (text positioning)
+#define CMD_FUNCTION_SET     0x30
+#define CMD_ENTRY_MODE_SET   0x06
+#define CMD_EXT_FUNCTION_SET 0x36
+#define CMD_DISPLAY_CONTROL  0x0F
+#define CMD_CLEAR_DISPLAY    0x01
+#define CMD_SET_DDRAM_ADDR   0x80
+
+// === SPI Data Transmission Function (3-Byte Format) === //
+void lcd_send(uint8_t mode, uint8_t data) {
+    gpio_put(PIN_CS, 0);  // Select LCD
+
+    uint8_t packet[3];
+    packet[0] = (mode ? 0x5F : 0x1F);  // 0x5F for data, 0x1F for command
+    packet[1] = data & 0x0F;  // Lower nibble
+    packet[2] = (data >> 4) & 0x0F;  // Upper nibble
+
+    spi_write_blocking(SPI_PORT, packet, 3);
+    
+    gpio_put(PIN_CS, 1);  // Deselect LCD
+    sleep_ms(2);
+}
+
+// === Check Busy Flag === //
+void lcd_check_busy() {
+    uint8_t busy = 1;
+    while (busy) {
+        gpio_put(PIN_CS, 0);
+        uint8_t command = 0x3F;
+        uint8_t response;
+        spi_write_blocking(SPI_PORT, &command, 1);
+        spi_read_blocking(SPI_PORT, 0x00, &response, 1);
+        gpio_put(PIN_CS, 1);
+
+        busy = response & 0x80; // Check if busy flag is set
+    }
+}
 
 // === LCD Reset Function === //
 void lcd_reset() {
-    gpio_init(PIN_RES);
-    gpio_set_dir(PIN_RES, GPIO_OUT);
-    gpio_put(PIN_RES, 0);  // Pull low to reset
+    gpio_put(PIN_RES, 0);
     sleep_ms(50);
-    gpio_put(PIN_RES, 1);  // Release reset
-    sleep_ms(150); // LCD requires >100ms after reset
+    gpio_put(PIN_RES, 1);
+    sleep_ms(150);
 }
 
-// === Function: Send Command to LCD === //
-void lcd_send_command(uint8_t command) {
-    gpio_put(PIN_CS, 0);  // Select LCD (Active Low)
-    spi_write_blocking(SPI_PORT, &command, 1);
-    gpio_put(PIN_CS, 1);  // Deselect LCD
-    sleep_ms(2);  // Small delay 
-    printf("[LCD] Sent Command: 0x%X\n", command);
-}
-
-// === Function: Send Data to LCD === //
-void lcd_send_data(uint8_t data) {
-    gpio_put(PIN_CS, 0);
-    uint8_t packet = data | 0x40;  // RS bit set for data mode
-    spi_write_blocking(SPI_PORT, &packet, 1);
-    gpio_put(PIN_CS, 1);
-    sleep_ms(1);
-    printf("[LCD] Sent Data: %c (0x%X)\n", data, data);
-}
-
-// === Function: Initialize LCD (Follows RW1073 Datasheet) === //
+// === LCD Initialization === //
 void lcd_init() {
     sleep_ms(25);
-    lcd_reset();  // Perform a hardware reset
+    lcd_reset();
 
-    printf("[LCD] Initializing...\n");
+    lcd_check_busy();
+    lcd_send(0, CMD_FUNCTION_SET); 
+    sleep_ms(15);
 
-    // 8-bit initialization sequence (RW1073 Datasheet)
-    lcd_send_command(CMD_FUNCTION_SET); 
-    sleep_ms(15);  
-
-    lcd_send_command(CMD_ENTRY_MODE_SET); // Auto-increment cursor
+    lcd_check_busy();
+    lcd_send(0, CMD_ENTRY_MODE_SET);
     sleep_ms(1);
-    printf("[LCD] Entry Mode Set.\n");
     
-    // Enable 4-line display mode (Extended function set)
-    lcd_send_command(CMD_EXT_FUNCTION_SET | 0x04);
-    printf("[LCD] 4-line display mode enabled.\n");
+    lcd_check_busy();
+    lcd_send(0, CMD_EXT_FUNCTION_SET | 0x04);
     sleep_ms(1);
 
-    lcd_send_command(0x09); // 4-line mode activation (from EA DIP205B docs)
+    lcd_check_busy();
+    lcd_send(0, 0x09); // 4-line mode
     sleep_ms(1);
-    printf("[LCD] 4-line display mode enabled.\n");
 
-    // === Now Write to SEGRAM (Clear Icon Data) === //
-    lcd_send_command(0x40); // Set SEGRAM Address
-    sleep_ms(1);
-    printf("[LCD] Setting SEGRAM Address...\n");
-
+    lcd_check_busy();
+    lcd_send(0, 0x40); // SEGRAM Clear
     for (int i = 0; i < 16; i++) {
-        lcd_send_data(0x00); // Write 0x00 to SEGRAM
+        lcd_send(1, 0x00);
     }
-    printf("[LCD] SEGRAM Cleared (Icons Reset).\n");
 
-    lcd_send_command(CMD_FUNCTION_SET); 
-    sleep_ms(15);  
+    lcd_check_busy();
+    lcd_send(0, CMD_FUNCTION_SET);
+    sleep_ms(15);
 
-    lcd_send_command(CMD_DISPLAY_CONTROL); // Display ON, Cursor ON
+    lcd_check_busy();
+    lcd_send(0, CMD_DISPLAY_CONTROL);
     sleep_ms(1);
-    printf("[LCD] Display ON.\n");
 
-    lcd_send_command(CMD_CLEAR_DISPLAY); // Clear display
+    lcd_check_busy();
+    lcd_send(0, CMD_CLEAR_DISPLAY);
     sleep_ms(5);
-    printf("[LCD] Cleared Display.\n");
-    printf("[LCD] Initialization Complete!\n");
 }
 
 // === Function: Print a String to the LCD === //
 void lcd_print(const char *str) {
     while (*str) {
-        lcd_send_data(*str++);
+        lcd_check_busy();
+        lcd_send(1, *str++);
     }
 }
 
 // === Main Program === //
 int main() {
     stdio_init_all();
-    sleep_ms(10000);   // Wait 10 seconds before starting (USB debug delay)
+    sleep_ms(5000);  // Delay before execution
 
     spi_init(SPI_PORT, 270000);
     spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
@@ -139,10 +141,25 @@ int main() {
     gpio_set_dir(PIN_CS, GPIO_OUT);
     gpio_put(PIN_CS, 1);
 
+    gpio_init(PIN_RES);
+    gpio_set_dir(PIN_RES, GPIO_OUT);
+    gpio_put(PIN_RES, 1);
+
     lcd_init();
+
+    lcd_send(0, CMD_SET_DDRAM_ADDR | 0x00);
+    lcd_print("Hello, World!");
+
+    lcd_send(0, CMD_SET_DDRAM_ADDR | 0x20);
+    lcd_print("SPI LCD Test");
+
+    lcd_send(0, CMD_SET_DDRAM_ADDR | 0x40);
+    lcd_print("Line 3 Display");
+
+    lcd_send(0, CMD_SET_DDRAM_ADDR | 0x60);
+    lcd_print("Final Line 4");
 
     while (true) {
         sleep_ms(1000);
-        printf("[DEBUG] Main loop running...\n");
     }
 }
