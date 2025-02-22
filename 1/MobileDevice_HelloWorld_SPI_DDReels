@@ -4,15 +4,14 @@
  * Project: Dynamic Drag Reels (D.D. Reels)
  * Author: Gabriel Joda
  * Platform: Raspberry Pi Pico W
- * Purpose: This is the second iteration of the SPI communication code for the EA DIP205-6 LCD (RW1073 Controller).
- *          This version attempts to implement a busy flag check before sending commands to improve reliability.
+ * Purpose: This is the third iteration of the SPI communication code for the EA DIP205-6 LCD (RW1073 Controller).
+ *          This version introduces debugging output via `printf()` to monitor commands and data sent to the LCD.
  *
  *          The code initializes SPI communication, performs hardware reset, and attempts to write to the 4x20 character LCD.
- *          Unlike the first iteration, this version introduces `lcd_is_busy()` to check the RW1073 busy flag before executing
- *          new commands. However, due to potential SPI timing and read functionality issues, this iteration **still does not work correctly**.
+ *          Like the previous iteration, it includes a busy flag check before sending commands to improve reliability.
  *
- *          Future iterations will address possible issues with SPI read operations and signal synchronization.
- *
+ *          However, **this iteration still does not work correctly**. Issues may be related to the SPI read operation used for the
+ *          busy flag check or timing mismatches in command execution. Debugging output should help identify the issue.
  *
  * Status: This code does not work as intended. Debugging required.
  * ----------------------------------------------------
@@ -24,11 +23,11 @@
 
 // SPI Pins
 #define SPI_PORT spi0
-#define PIN_MISO 16  // SOD ← MUST CONNECT
-#define PIN_CS   17
-#define PIN_SCLK 18
-#define PIN_MOSI 19
-#define PIN_RES  20
+#define PIN_MISO 16  // SOD (Slave Out)
+#define PIN_CS   17  // Chip Select
+#define PIN_SCLK 18  // Clock
+#define PIN_MOSI 19  // Data (SID)
+#define PIN_RES  22  // Reset (active low)
 
 // RW1073 Commands
 #define CMD_CLEAR       0x01
@@ -61,6 +60,7 @@ void lcd_command(uint8_t cmd) {
     gpio_put(PIN_CS, 0);
     spi_write_blocking(SPI_PORT, &cmd, 1);
     gpio_put(PIN_CS, 1);
+    printf("Command sent: 0x%02X\n", cmd);
 }
 
 void lcd_data(uint8_t data) {
@@ -69,19 +69,20 @@ void lcd_data(uint8_t data) {
     uint8_t packet = data | 0x40;  // RS=1
     spi_write_blocking(SPI_PORT, &packet, 1);
     gpio_put(PIN_CS, 1);
+    printf("Data sent: 0x%02X\n", data);
 }
 
 void lcd_init() {
     // Hardware Reset
     gpio_init(PIN_RES);
     gpio_set_dir(PIN_RES, GPIO_OUT);
-    gpio_put(PIN_RES, 0);
+    gpio_put(PIN_RES, 0);  // Active low reset
     sleep_ms(50);
     gpio_put(PIN_RES, 1);
-    sleep_ms(150);
+    sleep_ms(150);  // Wait >100ms after reset
 
     // SPI Configuration
-    spi_init(SPI_PORT, 100000);  // 100kHz
+    spi_init(SPI_PORT, 100000);  // 100kHz clock
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCLK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
@@ -104,7 +105,10 @@ void lcd_init() {
 
 int main() {
     stdio_init_all();
+    printf("Initializing LCD...\n");
+
     lcd_init();
+    printf("LCD Initialized.\n");
 
     // Write to all 4 lines
     lcd_command(0x80);  // Line 1
@@ -112,6 +116,8 @@ int main() {
     
     lcd_command(0xA0);  // Line 2
     lcd_data('W'); lcd_data('o'); lcd_data('r'); lcd_data('l'); lcd_data('d');
+
+    printf("Display updated.\n");
 
     while(1) tight_loop_contents();
 }
