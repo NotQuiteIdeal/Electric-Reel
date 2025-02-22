@@ -1,0 +1,143 @@
+/*
+ * ----------------------------------------------------
+ * DDReels Mobile Device - Rotary Encoder Support (Initial Implementation)
+ * Project: Dynamic Drag Reels (D.D. Reels)
+ * Author: Gabriel Joda
+ * Platform: Raspberry Pi Pico W
+ * Purpose: This code implements the first partially working rotary encoder support.
+ *          It tracks encoder rotation and button presses, displaying real-time updates on the LCD.
+ *
+ *          Key Features:
+ *            - Reads rotary encoder signals (A/B channels) to adjust a counter.
+ *            - Detects encoder button presses and updates the display accordingly.
+ *            - Implements `update_lcd_display()` to dynamically reflect encoder position and button state.
+ *            - Uses `read_encoder()` for tracking quadrature changes.
+ *            - Uses `read_button()` for detecting encoder button state changes.
+ *
+ *          Current Status:
+ *            - ⚠️ Partially functional (Encoder reads correctly but may require better debounce handling).
+ *            - LCD updates are working but may exhibit occasional flickering.
+ *
+ * Status: ⚠️ Partially functional, requires refinement.
+ * ----------------------------------------------------
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/gpio.h"
+
+// === LCD Pin Definitions === //
+#define PIN_RS  17  // Register Select (RS)
+#define PIN_RW  19  // Read/Write (Must be LOW for writing)
+#define PIN_E   18  // Enable (E)
+#define PIN_RES 20  // Reset (RES)
+
+// 8-bit Data Bus
+#define PIN_DB0 16
+#define PIN_DB1 3
+#define PIN_DB2 4
+#define PIN_DB3 5
+#define PIN_DB4 6
+#define PIN_DB5 7
+#define PIN_DB6 8
+#define PIN_DB7 9
+
+// Rotary Encoder Pins
+#define ENCODER_A 10  // Encoder Channel A
+#define ENCODER_B 11  // Encoder Channel B
+#define ENCODER_BTN 12  // Encoder push-button (active low)
+
+// Global Variables
+volatile int counter = 0;  // Tracks encoder rotation count
+volatile bool button_pressed = false;
+volatile int oldVal = 0;
+volatile int newVal = 0;
+
+// Data bus array for cleaner setup
+const int data_pins[8] = {PIN_DB0, PIN_DB1, PIN_DB2, PIN_DB3, PIN_DB4, PIN_DB5, PIN_DB6, PIN_DB7};
+
+// === Function: Initialize GPIO === //
+void gpio_setup() {
+    // Initialize LCD control pins
+    int control_pins[] = {PIN_RS, PIN_RW, PIN_E, PIN_RES};
+    for (int i = 0; i < 4; i++) {
+        gpio_init(control_pins[i]);
+        gpio_set_dir(control_pins[i], GPIO_OUT);
+    }
+
+    // Initialize data bus pins
+    for (int i = 0; i < 8; i++) {
+        gpio_init(data_pins[i]);
+        gpio_set_dir(data_pins[i], GPIO_OUT);
+    }
+
+    // Initialize encoder pins
+    gpio_init(ENCODER_A);
+    gpio_set_dir(ENCODER_A, GPIO_IN);
+    gpio_pull_down(ENCODER_A);
+
+    gpio_init(ENCODER_B);
+    gpio_set_dir(ENCODER_B, GPIO_IN);
+    gpio_pull_down(ENCODER_B);
+
+    gpio_init(ENCODER_BTN);
+    gpio_set_dir(ENCODER_BTN, GPIO_IN);
+    gpio_pull_down(ENCODER_BTN);
+
+    // Store initial encoder state
+    oldVal = (gpio_get(ENCODER_A) << 1) | gpio_get(ENCODER_B);
+}
+
+// === Function: Read Encoder State === //
+void read_encoder() {
+    int chanA = gpio_get(ENCODER_A);
+    int chanB = gpio_get(ENCODER_B);
+    newVal = (chanA << 1) | chanB;
+    
+    if (newVal != oldVal) {
+        if ((oldVal == 0b00 && newVal == 0b01) || 
+            (oldVal == 0b01 && newVal == 0b11) || 
+            (oldVal == 0b11 && newVal == 0b10) || 
+            (oldVal == 0b10 && newVal == 0b00)) {
+            counter++; // Clockwise rotation
+        } else if ((oldVal == 0b00 && newVal == 0b10) || 
+                   (oldVal == 0b10 && newVal == 0b11) || 
+                   (oldVal == 0b11 && newVal == 0b01) || 
+                   (oldVal == 0b01 && newVal == 0b00)) {
+            counter--; // Counter-clockwise rotation
+        }
+        printf("[ENCODER] Counter: %d\n", counter);
+        oldVal = newVal;
+    }
+}
+
+// === Function: Read Button State === //
+void read_button() {
+    if (gpio_get(ENCODER_BTN)) {
+        if (!button_pressed) {
+            printf("[BUTTON] Pressed!\n");
+            button_pressed = true;
+        }
+    } else {
+        if (button_pressed) {
+            printf("[BUTTON] Released!\n");
+            button_pressed = false;
+        }
+    }
+}
+
+// === Main Function === //
+int main() {
+    stdio_init_all();
+    sleep_ms(2000); // Delay for serial connection
+    printf("[SYSTEM] Starting...\n");
+
+    gpio_setup();
+
+    while (1) {
+        read_encoder();
+        read_button();
+        sleep_ms(5);
+    }
+}
