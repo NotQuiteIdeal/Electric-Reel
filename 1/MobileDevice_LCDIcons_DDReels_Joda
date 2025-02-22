@@ -1,3 +1,25 @@
+/*
+ * ----------------------------------------------------
+ * DDReels Mobile Device - LCD Icon Testing
+ * Project: Dynamic Drag Reels (D.D. Reels)
+ * Author: Gabriel Joda
+ * Platform: Raspberry Pi Pico W
+ * Purpose: This code tests the icon capabilities of the EA DIP205-6 LCD (RW1073 Controller).
+ *          The code executes a sequence to enable the icon display feature and load an icon into SEGRAM.
+ *          This version is partially functional but requires additional fine-tuning for full reliability.
+ *
+ *          Key Features in This Version:
+ *            - Implements `lcd_display_icon_example()` to execute the required sequence for displaying an icon.
+ *            - Uses RW1073's SEGRAM commands to store and show icons.
+ *            - Integrates encoder button control to trigger icon display dynamically.
+ *            - Maintains standard LCD functions, including `lcd_print_centered()` and screen clearing.
+ *
+ *          This version successfully triggers the icon display but requires further refinement for stability.
+ *
+ * Status: ⚠️ Partially functional (Icons appear inconsistently, requires more testing).
+ * ----------------------------------------------------
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
@@ -5,8 +27,7 @@
 
 // === LCD Pin Definitions === //
 // The LCD module (4x20 display) uses a controller similar to the HD44780,
-// but our module is built around the RW1073 driver/controller. For details see
-// MobileDevice_LCD_Joda.pdf :contentReference[oaicite:4]{index=4} and RW1073 datasheet :contentReference[oaicite:5]{index=5}.
+// but our module is built around the RW1073 driver/controller.
 #define PIN_RS  17    // Register Select: low = command, high = data.
 #define PIN_RW  19    // Read/Write control: low = write.
 #define PIN_E   18    // Enable pin: triggers data transfer on falling edge.
@@ -54,8 +75,6 @@ void lcd_send_data(uint8_t data) {
 }
 
 // Initializes the LCD module using standard RW1073/HD44780 procedures.
-// Refer to MobileDevice_LCD_Joda.pdf :contentReference[oaicite:9]{index=9}
-// and RW1073 datasheet :contentReference[oaicite:10]{index=10}.
 void lcd_init() {
     gpio_put(PIN_RES, 0);
     sleep_ms(50);
@@ -80,18 +99,12 @@ void lcd_init() {
     printf("[LCD] Initialization Complete!\n");
 }
 
-// Prints a string to the LCD.
-void lcd_print(const char *str) {
-    while (*str)
-        lcd_send_data(*str++);
-}
-
 // Prints a string centered on a given line (1 to 4).
 void lcd_print_centered(const char *str, uint8_t line) {
     uint8_t start_pos = (20 - strlen(str)) / 2;
     uint8_t ddram_address = (line - 1) * 0x20 + start_pos;
     lcd_send_command(0x80 | ddram_address);
-    lcd_print(str);
+    while (*str) lcd_send_data(*str++);
 }
 
 // Displays the main screen.
@@ -103,26 +116,18 @@ void display_main_screen() {
 }
 
 // --- New Function: lcd_display_icon_example --- //
-// This function executes the sequence:
-// 1. Function set 0x36.
-// 2. Set SEGRAM: command 0x42.
-// 3. Write icon-RAW address 0x02.
-// 4. Write data 0x10 twice to display the symbol.
-// 5. Function set 0x30 (8-bit mode, RE=0).
-// 6. Set DDRAM address 0x80 (restore DDRAM address).
 void lcd_display_icon_example(void) {
-    lcd_send_command(0x36); // Step 1: Function set to extended mode.
-    lcd_send_command(0x42); // Step 2: Set SEGRAM command.
-    lcd_send_data(0x02);    // Step 3: Set icon-RAW address to 0x02 (for letter symbol).
-    lcd_send_data(0x10);    // Step 4: Write data 0x10.
+    lcd_send_command(0x36); // Extended function set.
+    lcd_send_command(0x42); // Set SEGRAM command.
+    lcd_send_data(0x02);    // Set icon-RAW address to 0x02.
+    lcd_send_data(0x10);    // Write data 0x10.
     lcd_send_data(0x10);    // Write data 0x10 again.
-    lcd_send_command(0x30); // Step 5: Function set to 8-bit mode, RE=0.
-    lcd_send_command(0x80); // Step 6: Set DDRAM address to 0x80.
+    lcd_send_command(0x30); // Function set to 8-bit mode.
+    lcd_send_command(0x80); // Set DDRAM address to 0x80.
     printf("[ICON] Icon command sequence executed.\n");
 }
 
 // --- GPIO Setup --- //
-// Initializes all GPIO pins used by the LCD and encoder push-button.
 void gpio_setup(void) {
     int control_pins[] = {PIN_RS, PIN_RW, PIN_E, PIN_RES};
     for (int i = 0; i < 4; i++) {
@@ -146,12 +151,11 @@ int main(void) {
     display_main_screen();
 
     while (1) {
-        // When the encoder button is pressed (active low), execute the icon sequence.
         if (!gpio_get(ENCODER_BTN)) {
             printf("Encoder button pressed: executing icon sequence.\n");
-            lcd_display_icon_example(); // Execute the command sequence to display the icon.
-            sleep_ms(3000);             // Hold icon on screen for 3 seconds.
-            display_main_screen();      // Restore main screen.
+            lcd_display_icon_example();
+            sleep_ms(3000);
+            display_main_screen();
         }
         sleep_ms(50);
     }
