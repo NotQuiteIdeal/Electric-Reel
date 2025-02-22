@@ -1,3 +1,20 @@
+/*
+ * ----------------------------------------------------
+ * DDReels Mobile Device - SPI LCD Communication
+ * Project: Dynamic Drag Reels (D.D. Reels)
+ * Author: Gabriel Joda
+ * Platform: Raspberry Pi Pico W
+ * Purpose: This code attempts to interface the EA DIP205-6 LCD (RW1073 Controller)
+ *          with the Pico W using SPI communication. The goal is to display text
+ *          on a 4x20 character LCD.
+ *
+ *          This iteration follows the RW1073 initialization sequence as per
+ *          the datasheet. 
+ *
+ * Status: This code does not work as intended. Debugging required.
+ * ----------------------------------------------------
+ */
+
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
@@ -24,33 +41,33 @@ void lcd_reset() {
     gpio_init(PIN_RES);
     gpio_set_dir(PIN_RES, GPIO_OUT);
     gpio_put(PIN_RES, 0);  // Active low reset
-    sleep_ms(50);
+    sleep_ms(50);          // Datasheet specifies a minimum reset time
     gpio_put(PIN_RES, 1);
-    sleep_ms(150);  // Datasheet requires >100ms after reset
+    sleep_ms(150);         // Wait >100ms after reset
 }
 
 // Function to send a command to the LCD
 void lcd_send_command(uint8_t command) {
-    gpio_put(PIN_CS, 0);
+    gpio_put(PIN_CS, 0);  // Activate LCD
     spi_write_blocking(SPI_PORT, &command, 1);
-    gpio_put(PIN_CS, 1);
-    sleep_ms(2);  // RW1073 requires 37µs minimum delay
+    gpio_put(PIN_CS, 1);  // Deactivate LCD
+    sleep_ms(2);  // Required delay per RW1073 execution time
 }
 
 // Function to send data to the LCD
 void lcd_send_data(uint8_t data) {
     gpio_put(PIN_CS, 0);
-    uint8_t packet = data | 0x40;  // RS bit set for data
+    uint8_t packet = data | 0x40;  // RS bit set for data transmission
     spi_write_blocking(SPI_PORT, &packet, 1);
     gpio_put(PIN_CS, 1);
     sleep_ms(1);
 }
 
-// Proper initialization sequence for RW1073 controller
+// LCD initialization sequence as per RW1073 datasheet
 void lcd_init() {
     lcd_reset();
 
-    // Initialization sequence from RW1073 datasheet
+    // Initialization sequence based on Display Visions' sample code
     lcd_send_command(0x30);        // 8-bit interface, basic instruction set
     sleep_ms(15);                  // Wait >10ms
 
@@ -70,14 +87,10 @@ void lcd_init() {
     sleep_ms(1);
 
     lcd_send_command(0x01);        // Clear display
-    sleep_ms(5);                   // Clear needs >4.1ms
+    sleep_ms(5);                   // Wait >4.1ms
 
     lcd_send_command(0x06);        // Entry mode: increment, no shift
     sleep_ms(1);
-
-    // Set contrast (if using PWM for VCI)
-    // gpio_set_function(PIN_VCI, GPIO_FUNC_PWM);
-    // pwm_set_gpio_level(PIN_VCI, 125);  // Adjust contrast level
 }
 
 // Function to print a string on the LCD
@@ -90,33 +103,34 @@ void lcd_print(const char *str) {
 int main() {
     stdio_init_all();
 
-    // Initialize SPI
-    spi_init(SPI_PORT, 100000);    // Start with 100kHz clock
+    // Initialize SPI communication
+    spi_init(SPI_PORT, 100000);    // Start with 100kHz clock speed
     spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     gpio_set_function(PIN_SCLK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
 
-    // Initialize CS pin
+    // Initialize Chip Select (CS) pin
     gpio_init(PIN_CS);
     gpio_set_dir(PIN_CS, GPIO_OUT);
-    gpio_put(PIN_CS, 1);
+    gpio_put(PIN_CS, 1); // Ensure LCD is deselected by default
 
-    // Initialize LCD
+    // Initialize LCD module
     lcd_init();
 
-    // Print to all 4 lines (for 4x20 display)
-    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x00);  // Line 1
+    // Attempt to print text to all 4 lines (assuming 4x20 display)
+    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x00);  // Move to Line 1
     lcd_print("Hello, World!");
     
-    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x20);  // Line 2
+    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x20);  // Move to Line 2
     lcd_print("Line 2");
     
-    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x40);  // Line 3
+    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x40);  // Move to Line 3
     lcd_print("Line 3");
     
-    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x60);  // Line 4
+    lcd_send_command(CMD_SET_DDRAM_ADDR | 0x60);  // Move to Line 4
     lcd_print("Line 4");
 
+    // Infinite loop to prevent termination
     while (true) {
         sleep_ms(1000);
     }
