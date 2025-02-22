@@ -48,15 +48,15 @@ void gpio_setup() {
 
     gpio_init(ENCODER_A);
     gpio_set_dir(ENCODER_A, GPIO_IN);
-    gpio_pull_down(ENCODER_A);
+    gpio_pull_up(ENCODER_A);
 
     gpio_init(ENCODER_B);
     gpio_set_dir(ENCODER_B, GPIO_IN);
-    gpio_pull_down(ENCODER_B);
+    gpio_pull_up(ENCODER_B);
 
     gpio_init(ENCODER_BTN);
     gpio_set_dir(ENCODER_BTN, GPIO_IN);
-    gpio_pull_down(ENCODER_BTN);
+    gpio_pull_up(ENCODER_BTN);
 
     // Button and LED setup
     gpio_init(BUTTON_26);
@@ -197,7 +197,7 @@ void display_settings_menu(int index) {
 }
 
 void check_button_long_press() {
-    if (gpio_get(ENCODER_BTN)) {
+    if (!gpio_get(ENCODER_BTN)) {
         if (!button_pressed) {
             button_pressed = true;
             button_press_time = to_ms_since_boot(get_absolute_time());
@@ -215,27 +215,70 @@ void read_encoder() {
     static uint32_t last_time = 0;
     uint32_t current_time = time_us_32();
 
-    if (current_time - last_time < DEBOUNCE_DELAY_US) {
+    if (current_time - last_time < 10000) {  // 10 ms debounce
         return;
     }
 
-    int A = gpio_get(ENCODER_A);
-    int B = gpio_get(ENCODER_B);
-
-    if (A != last_A) {
-        if (A == 1) {
-            if (B == 0) menu_index++;
-            else menu_index--;
-            if (menu_index > 4) menu_index = 4;
-            if (menu_index < 0) menu_index = 0;
-            display_settings_menu(menu_index);
+    int A = !gpio_get(ENCODER_A);
+    if (A != last_A && A == 1) {  // Rising edge detected
+        int B = gpio_get(ENCODER_B);
+        if (B == 0) {
+            menu_index++;  // Clockwise rotation
+        } else {
+            menu_index--;  // Counter-clockwise rotation
         }
+
+        // Constrain menu_index within the valid range
+        if (menu_index > 4) menu_index = 4;
+        if (menu_index < 0) menu_index = 0;
+
+        printf("[ENCODER] Menu index: %d\n", menu_index);
+        display_settings_menu(menu_index);
         last_time = current_time;
     }
 
     last_A = A;
-    last_B = B;
 }
+
+// void read_encoder() {
+//     static uint32_t last_time = 0;
+//     uint32_t current_time = time_us_32();
+//     static int last_state = 0;
+
+//     if (current_time - last_time < 5000) {  // Reduce debounce to 5 ms for testing
+//         return;
+//     }
+
+//     int A = gpio_get(ENCODER_A);
+//     int B = gpio_get(ENCODER_B);
+//     int current_state = (A << 1) | B;
+
+//     // Debug output to see each transition
+//     printf("A: %d, B: %d, State: %d\n", A, B, current_state);
+
+//     if (current_state != last_state) {
+//         if ((last_state == 0b00 && current_state == 0b01) ||  // Clockwise transitions
+//             (last_state == 0b01 && current_state == 0b11) ||
+//             (last_state == 0b11 && current_state == 0b10) ||
+//             (last_state == 0b10 && current_state == 0b00)) {
+//             menu_index++;
+//             printf("[ENCODER] Clockwise\n");
+//         } else {
+//             menu_index--;
+//             printf("[ENCODER] Counter-clockwise\n");
+//         }
+
+//         if (menu_index > 4) menu_index = 4;
+//         if (menu_index < 0) menu_index = 0;
+
+//         display_settings_menu(menu_index);
+//         last_time = current_time;
+//         last_state = current_state;
+//     }
+// }
+
+
+
 
 void handle_buttons() {
     if (gpio_get(BUTTON_26)) {
