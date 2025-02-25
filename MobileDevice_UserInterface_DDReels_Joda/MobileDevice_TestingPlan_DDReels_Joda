@@ -1,3 +1,4 @@
+
 /*
  * ----------------------------------------------------------------------
  * DDReels Mobile Device - Encoder-Based Settings Navigation with UI
@@ -31,8 +32,11 @@
 
 // === LCD Pin Definitions === //
 // The LCD module (4x20 display) uses a controller similar to the HD44780,
-// but our module is built around the RW1073 driver/controller. For pin details and initialization,
-// see MobileDevice_LCD_Joda.pdf :contentReference[oaicite:4]{index=4} and RW1073 datasheet :contentReference[oaicite:5]{index=5}.
+// but our module is built around the RW1073 driver/controller. 
+// For pin details and initialization, see MobileDevice_LCD_Joda.pdf for EA DIP205J-6NLW datasheet.
+// This also includes a link to the RW1073 datasheet.
+// This iteration of code will be communicating with the LCD via parallel 8-Bit interface.
+// LCD pins are routed in such a way as to make it easy to swich to an SPI interface if needed.
 #define PIN_RS  17    // Register Select pin; low for command, high for data.
 #define PIN_RW  19    // Read/Write control; low for write.
 #define PIN_E   18    // Enable pin: triggers data read/write on falling edge.
@@ -43,18 +47,19 @@
 const int data_pins[8] = {16, 3, 4, 5, 6, 7, 8, 9};
 
 // Rotary Encoder Pins
-// Using a Bourns PEC11 encoder (see MobileDevice_Encoder_Joda.pdf :contentReference[oaicite:6]{index=6}).
+// Using a Bourns PEC11 encoder.
+// (see MobileDevice_Encoder_Joda.pdf for PEC11-4215F-S24 datasheet).
 #define ENCODER_A   10  // Channel A of the rotary encoder.
 #define ENCODER_B   11  // Channel B of the rotary encoder.
 #define ENCODER_BTN 12  // Integrated push-button on the encoder.
 
 // Button and LED Pins
-// These buttons/LEDs serve various functions (e.g., fish bitting simulator, mute, Reel-Up).
+// These buttons/Buzzer/LEDs serve various functions (e.g., fish bitting simulator, mute, Reel-Up).
 #define BUTTON_26 26 // Fish bitting simulator button.
 #define BUTTON_14 14 // Mute button.
 #define BUTTON_15 15 // Reel-Up button.
+#define BUZZER_13    13 // Alarm buzzer.
 #define LED_28    28 // Alarm LED.
-#define LED_13    13 // Alarm buzzer.
 #define LED_27    27 // Reel-Up LED indicator.
 
 // Global Variables
@@ -71,6 +76,7 @@ volatile bool ccw_fall = false; // Set when a falling edge on channel B is detec
 int last_menu_index = -1;
 
 // New global flag: when entering settings mode, ignore the very next encoder button press.
+// Without this the LCD instantly think the user chose subsetting "1.Reel-Up Speed"
 volatile bool ignore_next_press = false;
 
 // New flag for when a subpage is active (i.e., editing a specific setting).
@@ -81,7 +87,7 @@ volatile bool in_submenu = false;
 int reel_speed = 50;       // Reel-Up speed percentage (0 to 100%), in steps of 10.
 int stop_length = 10;      // Auto stop length in feet (0 to 100 FT), in steps of 1.
 bool metric_mode = false;  // Display mode: false = Imperial, true = Metric.
-bool alarm_enabled = true; // Alarm enabled flag (used to drive LED_28 and LED_13).
+bool alarm_enabled = true; // Alarm enabled flag (used to drive LED_28 and BUZZER_13).
 
 // --- LCD Helper Functions --- //
 // Writes an 8-bit value to the LCD data bus by setting each data pin.
@@ -91,7 +97,7 @@ void lcd_write_bus(uint8_t data) {
     }
 }
 
-// Generates an enable pulse (as required by the LCD controller per RW1073 and HD44780 protocols :contentReference[oaicite:8]{index=8}).
+// Generates an enable pulse (as required by the LCD controller per RW1073.
 void lcd_pulse_enable() {
     gpio_put(PIN_E, 1);
     sleep_us(200);
@@ -118,7 +124,7 @@ void lcd_send_data(uint8_t data) {
 }
 
 // Initializes the LCD module.
-// The initialization sequence is based on standard HD44780/RW1073 procedures :contentReference[oaicite:9]{index=9} and :contentReference[oaicite:10]{index=10}.
+// The initialization sequence is based on standard HD44780/RW1073 procedures.
 void lcd_init() {
     gpio_put(PIN_RES, 0);
     sleep_ms(50);
@@ -158,7 +164,7 @@ void lcd_print_normal(const char *str, uint8_t line) {
 }
 
 // Prints a string centered on a given line (1-4) on the LCD.
-// Uses the 4x20 or similar display dimensions (as per MobileDevice_LCD_Joda :contentReference[oaicite:11]{index=11}).
+// Uses the 4x20 or similar display dimensions (as per MobileDevice_LCD_Joda.pdf).
 void lcd_print_centered(const char *str, uint8_t line) {
     uint8_t start_pos = (20 - strlen(str)) / 2;
     uint8_t ddram_address = (line - 1) * 0x20 + start_pos;
@@ -167,7 +173,7 @@ void lcd_print_centered(const char *str, uint8_t line) {
 }
 
 // Displays the main screen of the device.
-// This screen might show primary operational information (e.g., reel position, etc.).
+// This screen will show primary operational information (e.g., Length, Drag etc.).
 void display_main_screen() {
     lcd_send_command(0x01);  // Clear Display.
     lcd_print_centered("MAIN SCREEN", 1);
@@ -204,7 +210,7 @@ void display_settings_menu(int index) {
 }
 
 // --- Subpage Functionality --- //
-// Opens a subpage for the selected setting. For options 0-3, a subpage is used for editing.
+// Opens a subpage for the selected setting using cases. For options 0-3, a subpage is used for editing.
 // For option 5 ("Save Settings" corresponding to menu_index == 4), we immediately save without opening a subpage.
 void open_subpage(int selection) {
     in_submenu = true;
@@ -261,10 +267,6 @@ void check_settings_selection(void) {
         if (duration < 3000) {
             if (menu_index == 4) {
                 // For "Save Settings", immediately save and return to main screen.
-                printf("[SAVE] Settings saved: Speed=%d%%, Length=%dFT, Mode=%s, Alarm=%s\n",
-                       reel_speed, stop_length,
-                       metric_mode ? "Metric" : "Imperial",
-                       alarm_enabled ? "ON" : "OFF");
                 in_settings_menu = false;
                 lcd_send_command(0x01);  // Clear Display.
                 lcd_print_centered("Saving...", 2);
@@ -308,72 +310,73 @@ void check_submenu_exit(void) {
 // When not in a subpage, encoder rotations update the settings menu selection.
 // In a subpage for numeric options (menu_index 0 or 1), rotations adjust the parameter values.
 void encoder_callback(uint gpio, uint32_t events) {
-    uint32_t gpio_state = (gpio_get_all() >> 10) & 0b11;
-    if (!in_submenu) {
-        if (gpio == ENCODER_A) {
-            if (!cw_fall && (gpio_state == 0b10)) {
-                cw_fall = true;
+    uint32_t gpio_state = (gpio_get_all() >> 10) & 0b11;  // Read all GPIOs, shift right 10 bits to get bits for ENCODER_A (GPIO10) and ENCODER_B (GPIO11), then mask to obtain only these two bits.
+    
+    if (!in_submenu) {                              // If NOT in a subpage (i.e., in the main settings menu):
+        if (gpio == ENCODER_A) {                    // If the interrupt comes from encoder channel A:
+            if (!cw_fall && (gpio_state == 0b10)) {  // If the CW flag is not set and the state indicates a falling edge on channel A (binary 10):
+                cw_fall = true;                   // Set the CW flag to indicate the beginning of a CW transition.
             }
-            if (ccw_fall && (gpio_state == 0b00)) {
-                ccw_fall = false;
-                cw_fall = false;
-                menu_index--;
-                if (menu_index < 0) menu_index = 0;
-                printf("[ENCODER] CCW - Menu index: %d\n", menu_index);
+            if (ccw_fall && (gpio_state == 0b00)) {  // If the CCW flag is set and the state has transitioned to 00 (confirming a CCW rotation):
+                ccw_fall = false;                 // Reset the CCW flag.
+                cw_fall = false;                  // Reset the CW flag.
+                menu_index--;                     // Decrement the menu index (move to the previous menu item).
+                if (menu_index < 0) menu_index = 0; // Ensure the menu index does not go below 0.
+                printf("[ENCODER] CCW - Menu index: %d\n", menu_index); // Debug print the new menu index.
             }
-        } else if (gpio == ENCODER_B) {
-            if (!ccw_fall && (gpio_state == 0b01)) {
-                ccw_fall = true;
+        } else if (gpio == ENCODER_B) {             // Else if the interrupt comes from encoder channel B:
+            if (!ccw_fall && (gpio_state == 0b01)) {  // If the CCW flag is not set and the state indicates a falling edge on channel B (binary 01):
+                ccw_fall = true;                  // Set the CCW flag.
             }
-            if (cw_fall && (gpio_state == 0b00)) {
-                cw_fall = false;
-                ccw_fall = false;
-                menu_index++;
-                if (menu_index > 4) menu_index = 4;
-                printf("[ENCODER] CW - Menu index: %d\n", menu_index);
+            if (cw_fall && (gpio_state == 0b00)) {   // If the CW flag is set and the state transitions to 00 (confirming a CW rotation):
+                cw_fall = false;                  // Reset the CW flag.
+                ccw_fall = false;                 // Reset the CCW flag.
+                menu_index++;                     // Increment the menu index (move to the next menu item).
+                if (menu_index > 4) menu_index = 4; // Clamp the menu index to the maximum value (4).
+                printf("[ENCODER] CW - Menu index: %d\n", menu_index);  // Debug print the new menu index.
             }
         }
-    } else {
-        if (menu_index == 0 || menu_index == 1) {
-            if (gpio == ENCODER_A) {
-                if (!cw_fall && (gpio_state == 0b10)) {
-                    cw_fall = true;
+    } else {                                        // Else, if we are in a subpage (editing a numeric parameter):
+        if (menu_index == 0 || menu_index == 1) {    // If the subpage is for options 0 (Reel-Up Speed) or 1 (Auto Stop Length):
+            if (gpio == ENCODER_A) {                // If the interrupt comes from channel A:
+                if (!cw_fall && (gpio_state == 0b10)) { // If the CW flag is not set and a falling edge is detected on channel A:
+                    cw_fall = true;             // Set the CW flag.
                 }
-                if (ccw_fall && (gpio_state == 0b00)) {
-                    ccw_fall = false;
-                    cw_fall = false;
-                    if (menu_index == 0) {
-                        reel_speed -= 10;
-                        if (reel_speed < 0) reel_speed = 0;
-                    } else if (menu_index == 1) {
-                        stop_length -= 1;
-                        if (stop_length < 0) stop_length = 0;
+                if (ccw_fall && (gpio_state == 0b00)) { // If the CCW flag is set and the state confirms a falling edge:
+                    ccw_fall = false;           // Reset the CCW flag.
+                    cw_fall = false;            // Reset the CW flag.
+                    if (menu_index == 0) {        // If in Reel-Up Speed subpage:
+                        reel_speed -= 10;         // Decrease reel speed by 10%.
+                        if (reel_speed < 0) reel_speed = 0;  // Ensure reel speed doesn't drop below 0.
+                    } else if (menu_index == 1) { // Else if in Auto Stop Length subpage:
+                        stop_length -= 1;         // Decrease stop length by 1 ft.
+                        if (stop_length < 0) stop_length = 0; // Ensure stop length doesn't drop below 0.
                     }
-                    printf("[SUBPAGE] Updated (CCW) - ");
+                    printf("[SUBPAGE] Updated (CCW) - "); // Debug print that an update was made.
                     if (menu_index == 0)
-                        printf("Speed: %d%%\n", reel_speed);
+                        printf("Speed: %d%%\n", reel_speed); // Print the new reel speed.
                     else
-                        printf("Length: %d FT\n", stop_length);
+                        printf("Length: %d FT\n", stop_length); // Print the new stop length.
                 }
-            } else if (gpio == ENCODER_B) {
-                if (!ccw_fall && (gpio_state == 0b01)) {
-                    ccw_fall = true;
+            } else if (gpio == ENCODER_B) {         // Else if the interrupt comes from channel B:
+                if (!ccw_fall && (gpio_state == 0b01)) { // If the CCW flag is not set and a falling edge is detected on channel B:
+                    ccw_fall = true;            // Set the CCW flag.
                 }
-                if (cw_fall && (gpio_state == 0b00)) {
-                    cw_fall = false;
-                    ccw_fall = false;
-                    if (menu_index == 0) {
-                        reel_speed += 10;
-                        if (reel_speed > 100) reel_speed = 100;
-                    } else if (menu_index == 1) {
-                        stop_length += 1;
-                        if (stop_length > 100) stop_length = 100;
+                if (cw_fall && (gpio_state == 0b00)) { // If the CW flag is set and the state confirms a falling edge:
+                    cw_fall = false;            // Reset the CW flag.
+                    ccw_fall = false;           // Reset the CCW flag.
+                    if (menu_index == 0) {        // If in Reel-Up Speed subpage:
+                        reel_speed += 10;         // Increase reel speed by 10%.
+                        if (reel_speed > 100) reel_speed = 100; // Clamp reel speed to 100%.
+                    } else if (menu_index == 1) { // Else if in Auto Stop Length subpage:
+                        stop_length += 1;         // Increase stop length by 1 ft.
+                        if (stop_length > 100) stop_length = 100; // Clamp stop length to 100.
                     }
-                    printf("[SUBPAGE] Updated (CW) - ");
+                    printf("[SUBPAGE] Updated (CW) - "); // Debug print that an update was made.
                     if (menu_index == 0)
-                        printf("Speed: %d%%\n", reel_speed);
+                        printf("Speed: %d%%\n", reel_speed); // Print the new reel speed.
                     else
-                        printf("Length: %d FT\n", stop_length);
+                        printf("Length: %d FT\n", stop_length); // Print the new stop length.
                 }
             }
         }
@@ -404,15 +407,15 @@ void check_button_long_press(void) {
 // --- Handle Other Buttons --- //
 // Additional buttons (BUTTON_26, BUTTON_14, BUTTON_15) control other functions.
 // For example, BUTTON_26 might simulate fish biting, BUTTON_14 mutes audio, etc.
-// LED_28, LED_13, LED_27 indicate status (e.g., alarm, Reel-Up indicator).
+// LED_28, BUZZER_13, LED_27 indicate status (e.g., alarm, Reel-Up indicator).
 void handle_buttons() {
     if (gpio_get(BUTTON_26)) {
         gpio_put(LED_28, 1);
-        gpio_put(LED_13, 1);
+        gpio_put(BUZZER_13, 1);
     }
     if (gpio_get(BUTTON_14)) {
         gpio_put(LED_28, 0);
-        gpio_put(LED_13, 0);
+        gpio_put(BUZZER_13, 0);
     }
     static uint32_t button_15_press_time = 0;
     static bool led_27_on = false;
@@ -475,9 +478,9 @@ void gpio_setup(void) {
     gpio_init(LED_28);
     gpio_set_dir(LED_28, GPIO_OUT);
     gpio_put(LED_28, 0);
-    gpio_init(LED_13);
-    gpio_set_dir(LED_13, GPIO_OUT);
-    gpio_put(LED_13, 0);
+    gpio_init(BUZZER_13);
+    gpio_set_dir(BUZZER_13, GPIO_OUT);
+    gpio_put(BUZZER_13, 0);
     gpio_init(LED_27);
     gpio_set_dir(LED_27, GPIO_OUT);
     gpio_put(LED_27, 0);
