@@ -12,8 +12,7 @@ extern const uint8_t profile_data[];
 static uint8_t adv_data[] = {
     0x02, BLUETOOTH_DATA_TYPE_FLAGS, APP_AD_FLAGS,
     0x0F, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'P', 'i', 'c', 'o', '_', 'R', 'e', 'e', 'l',
-    0x11, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS, 
-    0xe6, 0x9b, 0x84, 0x97, 0x9e, 0x59, 0x42, 0xfb, 0xbe, 0x16, 0x84, 0xa6, 0x62, 0xd4, 0xfa, 0x66  // REEL_READS_UUID (first service)
+    0x11, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS
 };
 
 static const uint8_t adv_data_len = sizeof(adv_data);
@@ -116,14 +115,14 @@ void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint
             printf("\n");
 
             gap_advertisements_set_data(adv_data_len, (uint8_t*) adv_data);
-            gap_advertisements_enable(1);
+            gap_advertisements_enable(1); // Ensure Advertising is enabled
             break;
 
-        case HCI_EVENT_DISCONNECTION_COMPLETE:
+        case HCI_EVENT_DISCONNECTION_COMPLETE: // Covers disconnection and timeout
             le_notification_enabled = 0;
             break;
 
-        case ATT_EVENT_CAN_SEND_NOW:
+        case ATT_EVENT_CAN_SEND_NOW: // Checks if event is 
             if (le_notification_enabled) {
                 att_server_notify(con_handle, ATT_CHARACTERISTIC_1476a75a_2c6d_4649_8819_bb830daaa603_01_VALUE_HANDLE, (uint8_t*)&line_length, sizeof(line_length));
                 att_server_notify(con_handle, ATT_CHARACTERISTIC_950e9e70_c453_4505_87e3_9dd6db626cc1_01_VALUE_HANDLE, (uint8_t*)&drag_set, sizeof(drag_set));
@@ -178,7 +177,7 @@ uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t att_hand
     if (att_handle == ATT_CHARACTERISTIC_1476a75a_2c6d_4649_8819_bb830daaa603_01_VALUE_HANDLE + 1) {
         descriptor_value = "Line Length";
     } 
-    if (att_handle == ATT_CHARACTERISTIC_950e9e70_c453_4505_87e3_9dd6db626cc1_01_VALUE_HANDLE + 1) {
+    if (att_handle == ATT_CHARACTERISTIC_950e9e70_c453_4505_87e3_9dd6db626cc1_01_VALUE_HANDLE + 1) { //
         descriptor_value = "Drag Set Value";
     }
 
@@ -192,8 +191,19 @@ uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t att_hand
 
 // Handle BLE Write Requests
 int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size) {
+    if (attribute_handle == 0x018) { //Checks if Characteristic
+        uint16_t cccd_value = little_endian_read_16(buffer, 0);
+        if (cccd_value == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_INDICATION) {
+            le_notification_enabled = 1;
+            printf("Client enabled indications!\n");
+        } else {
+            le_notification_enabled = 0;
+            printf("Client disabled indications.\n");
+        }
+        return 0; // Successfully handled CCCD write
+    }
+
     if (attribute_handle == 0x0017) {  
-        received_ping_count++;
         
         // Get the server's current timestamp when receiving the response
         absolute_time_t server_received_time = get_absolute_time();
@@ -204,6 +214,21 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
 
         printf("Received Ping Response from Client!\n");
         printf("Round-trip time: %u us (%.3f ms)\n", round_trip_time, round_trip_time / 1000.0);
+        
+        received_ping_count++;
+        
+        uint8_t new_ping_value = 1;  // Keep sending a value
+        printf("Pinging!\n");
+        send_ping_notification();
+
+        uint8_t data_to_send = 42;
+        att_server_notify(connection_handle, attribute_handle, &data_to_send, sizeof(data_to_send));
+
+        if (buffer_size > 0) {
+            printf("Client sent value: %02X\n", buffer[0]);
+        } else {
+            printf("WARNING: Empty write received from client!\n");
+        }
         
         // Start the refresh rate timer
         start_refresh_rate_timer();
