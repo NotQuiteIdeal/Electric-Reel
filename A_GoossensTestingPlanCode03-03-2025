@@ -1,0 +1,663 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+#include "hardware/timer.h"
+#include "hardware/gpio.h"
+#include "pico/multicore.h"
+#include "pico/time.h"
+#define I2C_PORT i2c0
+#define SDA_PIN 4 // i2c data
+#define SCL_PIN 5 // i2c clock
+#define CFA634_I2C_ADDR 0x42  // I2C address (7-bit format)
+#define ENCODER_A 1 // encoder a side
+#define ENCODER_B 0 // encoder b side
+#define ENCODER_BTN 2 // encoder button
+#define RBTN 6 // right button
+#define LBTN 7 // left button
+#define Buzz 8 // buzzer
+#define PULSES_PER_UPDATE 4  // Update after every 4 pulses
+#define DEBOUNCE_DELAY 50    // Short pause to allow proper pulse registration (in milliseconds)
+static int last_values[8] = {-1, -1, -1, -1,-1,-1,-1,-1}; // Store previous values for menus
+volatile int last_linelength = -1;// used to detremine if to update display
+volatile int last_dragset = -1;// used to detremine if to update display
+static int previous_encoder_value = 0;// used for reading encoder
+volatile bool menuActive = false; // used to determine if menu is active for encoder
+volatile bool button_pressed = false; //used to store if button is pressed or not
+volatile uint32_t button_press_time = 0; // time button is pressed
+volatile bool in_settings_menu = false;// if in settings menu
+volatile int menu_index = 0; // index for tracking in setting
+volatile bool cw_fall = false; // used for encoder
+volatile bool ccw_fall = false;// used for encoder
+int last_menu_index = -1; // to ensure the screen displays
+volatile bool ignore_next_press = false; // ingore if less than that time and not in a settings menu
+volatile bool in_submenu = false; // stores if in submen
+volatile int selected_digit = 1; // which digit the cursors is on
+volatile bool isImperial = true; //false = metric, true = imperial
+int AutoStopLen[2] = {0,0}; // store values for setting
+int MaxSpeed[2] = {0,0}; // store values for setting
+int MinSpeed[2] = {0,0};// store values for setting
+int SpoolDiameter[2] = {0.0};// store values for setting
+volatile int selected_menu = 0; // which menu_index is selected
+volatile bool right_pressed = false; // store if right button is pressed
+volatile bool left_pressed = false; // store if left button is pressed
+volatile bool buzz_en = false; // store if buzzer is enabled
+volatile int linecon = 0; // value used for conversion
+volatile int dragcon = 0; // value used for conversion
+volatile bool encoder_btpress = false; // store if encoder is pressed
+volatile bool long_press = false; // check if long press
+volatile bool update_display = true; // sets flag to true until 
+bool value_changed = false; // Track if any value has changed
+//leave alone
+static int encoder_value = 0;
+static uint32_t last_state = 0;
+static uint32_t last_read_time = 0;
+const uint32_t debounce_delay = 50;
+volatile int last_encoder_A = 0;
+volatile int last_encoder_B = 0;
+
+// Function to send a command to the LCD
+void cfa634_send_command(uint8_t cmd) {
+    uint8_t buffer[2] = {0xFE, cmd};  // Command format
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 2, false);
+    sleep_ms(100);
+}
+void setcursor(uint8_t col, uint8_t row){
+    uint8_t buffer[3] = {0x11, col, row};
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, 3, false);
+    sleep_ms(50);
+}
+void cfa634_print(const char *text, uint8_t col, uint8_t row) {
+    uint8_t display_width = 24; // CFA-634 is a 20-column display
+    size_t text_length = strlen(text);
+    if (text_length > display_width) {
+        text_length = display_width; // Trim text if it's too long
+    }
+    size_t leading_spaces = (display_width - text_length) / 2; // Center alignment
+    char padded_text[display_width + 1]; // +1 for null terminator
+    snprintf(padded_text, sizeof(padded_text), "%*s%s", (int)leading_spaces, " ", text);
+    setcursor(col, row);
+    for (size_t i = 0; i < strlen(padded_text); i++) { // send padded number to display
+        i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, (uint8_t *)&padded_text[i], 1, false);
+        sleep_ms(2); // Small delay for LCD to process
+    }
+}
+void i2c_setup() {
+    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+}
+void cfa634_clear_screen() {
+    uint8_t clear_cmd = 0x0C;  // Form Feed (Control+L) in ASCII
+    int result = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &clear_cmd, 1, false);
+    sleep_ms(3);  // Give LCD time to process
+}
+// End of Screen Set up
+void selectedmenudisplay(int pos){
+    switch (pos) {
+        case 0:
+            cfa634_print("       SAVING       ",0,0);
+            cfa634_print("                    ",0,1);
+            cfa634_print("  RETURNING TO MAIN ",0,2);
+            cfa634_print("                    ",0,3);
+            sleep_ms(1000); // delay to show message
+            in_submenu = false; // this line and next tell to return to main
+            in_settings_menu = false;
+            // set values to update the main screen
+            last_linelength = -1;
+            last_dragset = -1;
+            
+            break;
+        case 1:
+            cfa634_print("                    ",0,0);
+            cfa634_print("    RESETTING LINE  ",0,1);
+            cfa634_print(" PRESS DIAL > RETURN",0,2);
+            cfa634_print("                    ",0,3);
+            break;
+        case 2:
+            char display_value[21];
+            char cursor_position[21] = "          -         "; // Default cursor below second digit
+            sprintf(display_value, "         %d%d         ", AutoStopLen[0], AutoStopLen[1]);
+            if (last_values[0] != AutoStopLen[0] || last_values[1] != AutoStopLen[1]) {
+                last_values[0] = AutoStopLen[0];
+                last_values[1] = AutoStopLen[1];
+                // Move the cursor to the correct digit position
+                cursor_position[9 + selected_digit] = '-';
+                cfa634_print("   ENTER AUTO STOP  ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-9  ", 0, 1);
+                cfa634_print(display_value, 0, 2);
+                cfa634_print(cursor_position, 0, 3);
+            }
+            break;
+        case 3:
+            cfa634_print(isImperial ? "    CURRENT: IMPERIAL" : "    CURRENT: METRIC", 0, 0);
+            cfa634_print("    LEFT > METRIC   ",0,1);
+            cfa634_print("   RIGHT > IMPERIAL ",0,2);
+            cfa634_print(" PRESS DIAL > RETURN",0,3);
+            break;
+        case 4:
+            char display_value1[21];
+            char cursor_position1[21] = "          -         "; // Default cursor below second digit
+            sprintf(display_value, "         %d%d         ", MaxSpeed[0], MaxSpeed[1]);
+            if (last_values[2] != MaxSpeed[0] || last_values[3] != MaxSpeed[1]) {
+                last_values[2] = MaxSpeed[0];
+                last_values[3] = MaxSpeed[1];
+                // Move the cursor to the correct digit position
+                cursor_position1[9 + selected_digit] = '-';
+                cfa634_print("   ENTER MAX SPEED  ", 0, 0);
+                cfa634_print("      VALUE 0-9     ", 0, 1);
+                cfa634_print(display_value1, 0, 2);
+                cfa634_print(cursor_position1, 0, 3);
+            }
+            break;
+        case 5:
+            char display_value2[21];
+            char cursor_position2[21] = "          -         "; // Default cursor below second digit
+            sprintf(display_value, "         %d%d         ", MinSpeed[0], MinSpeed[1]);
+            if (last_values[4] != MinSpeed[0] || last_values[5] != MinSpeed[1]) {
+                last_values[4] = MinSpeed[0];
+                last_values[5] = MinSpeed[1];
+                // Move the cursor to the correct digit position
+                cursor_position2[9 + selected_digit] = '-';
+                cfa634_print("   ENTER MIN SPEED  ", 0, 0);
+                cfa634_print("      VALUE 0-9     ", 0, 1);
+                cfa634_print(display_value2, 0, 2);
+                cfa634_print(cursor_position2, 0, 3);
+            }
+            break;
+        case 6:
+                
+            char display_value3[21];
+            char cursor_position3[21] = "          -         "; // Default cursor below second digit
+            sprintf(display_value, "         %d%d         ", SpoolDiameter[0], SpoolDiameter[1]);
+            if (last_values[6] != SpoolDiameter[0] || last_values[7] != SpoolDiameter[1]) {
+                last_values[6] = SpoolDiameter[0];
+                last_values[7] = SpoolDiameter[1];    
+                // Move the cursor to the correct digit position
+                cursor_position3[9 + selected_digit] = '-';
+                cfa634_print("   ENTER Spool DI-  ", 0, 0);
+                cfa634_print("   AMETER VALUE 0-9 ", 0, 1);
+                cfa634_print(display_value3, 0, 2);
+                cfa634_print(cursor_position3, 0, 3);
+            }
+            break;
+        case 7:
+            cfa634_print(" RECALIBRATING DRAG ",0,0);
+            cfa634_print("                    ",0,1);
+            cfa634_print("  PUSH DIAL > RETURN",0,2);
+            cfa634_print("                    ",0,3);
+            break;
+        default: break;
+    }
+}
+void settingsdisplay(int pos){
+    sleep_ms(50);
+    switch (pos) {
+        case 0:
+            cfa634_print(" >0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 1:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print(" >1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 2:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print(" >2.AUTO STOP LENGTH",0,2);
+            cfa634_print("  3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 3:
+            cfa634_print("  0.RETURN          ",0,0);
+            cfa634_print("  1.RESET LINE      ",0,1);
+            cfa634_print("  2.AUTO STOP LENGTH",0,2);
+            cfa634_print(" >3.METRIC>IMPERIAL ",0,3);
+            break;
+        case 4:
+            cfa634_print(" >4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 5:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print(" >5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 6:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print(" >6.SPOOL DIAMETER  ",0,2);
+            cfa634_print("  7.RECALIBRATE DRAG",0,3);
+            break;
+        case 7:
+            cfa634_print("  4.MAX SPEED       ",0,0);
+            cfa634_print("  5.MIN SPEED       ",0,1);
+            cfa634_print("  6.SPOOL DIAMETER  ",0,2);
+            cfa634_print(" >7.RECALIBRATE DRAG",0,3);
+            break;
+        default: break;
+    }
+}
+// Function to display main screen information for line and drag in either imperial or metric units
+void cfa634_main(int line, int drag) {
+    // Check if the current measurement system is imperial
+    if (isImperial) {
+        cfa634_clear_screen(); // Clear the display
+        cfa634_print("   MAIN", 0, 0); // Display "MAIN" on the first line
+
+        // Format and display the line length in feet
+        if (line < 10) { // If line is a single digit
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: 000%d FEET", line);
+            cfa634_print(formattedline, 0, 1);
+        } else if (line < 100) { // If line is two digits
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: 00%d FEET", line);
+            cfa634_print(formattedline, 0, 1);
+        } else if (line < 1000) { // If line is three digits
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: 0%d FEET", line);
+            cfa634_print(formattedline, 0, 1);
+        } else { // If line is four digits or more
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: %d FEET", line);
+            cfa634_print(formattedline, 0, 1);
+        }
+
+        // Format and display the drag in foot-pounds
+        if (drag < 10) { // If drag is a single digit
+            char formatteddrag[20];
+            sprintf(formatteddrag, "   DRAG: 00%d FT-LBS", drag);
+            cfa634_print(formatteddrag, 0, 2);
+        } else if (drag < 100) { // If drag is two digits
+            char formatteddrag[20];
+            sprintf(formatteddrag, "   DRAG: 0%d FT-LBS", drag);
+            cfa634_print(formatteddrag, 0, 2);
+        } else { // If drag is three digits or more
+            char formatteddrag[20];
+            sprintf(formatteddrag, "   DRAG: %d FT-LBS", drag);
+            cfa634_print(formatteddrag, 0, 2);
+        }
+        
+        cfa634_print("  ", 0, 3); // Empty line for spacing
+    } else if (!isImperial) { // If the current measurement system is metric
+        // Convert line and drag to metric units
+        linecon = line * 0.3048; // Convert feet to meters
+        dragcon = drag * 1.3558179483; // Convert foot-pounds to newton-meters
+
+        cfa634_clear_screen(); // Clear the display
+        cfa634_print("   MAIN", 0, 0); // Display "MAIN" on the first line
+
+        // Format and display the line length in meters
+        if (line < 10) { // If line is a single digit
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: 000%d M", linecon);
+            cfa634_print(formattedline, 0, 1);
+        } else if (line < 100) { // If line is two digits
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: 00%d M", linecon);
+            cfa634_print(formattedline, 0, 1);
+        } else if (line < 1000) { // If line is three digits
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: 0%d M", linecon);
+            cfa634_print(formattedline, 0, 1);
+        } else { // If line is four digits or more
+            char formattedline[20];
+            sprintf(formattedline, "   LINE: %d M", linecon);
+            cfa634_print(formattedline, 0, 1);
+        }
+
+        // Format and display the drag in newton-meters
+        if (drag < 10) { // If drag is a single digit
+            char formatteddrag[20];
+            sprintf(formatteddrag, "   DRAG: 00%d NM", dragcon);
+            cfa634_print(formatteddrag, 0, 2);
+        } else if (drag < 100) { // If drag is two digits
+            char formatteddrag[20];
+            sprintf(formatteddrag, "   DRAG: 0%d NM", dragcon);
+            cfa634_print(formatteddrag, 0, 2);
+        } else { // If drag is three digits or more
+            char formatteddrag[20];
+            sprintf(formatteddrag, "   DRAG: %d NM", dragcon);
+            cfa634_print(formatteddrag, 0, 2);
+        }
+
+        cfa634_print("  ", 0, 3); // Empty line for spacing
+    }
+}
+// Function to set the state of the buzzer
+void set_buzzer_state(bool state) {
+    if (state) { // If the buzzer should be enabled
+        buzz_en = true; // Set the buzzer enabled flag
+        gpio_put(Buzz, 1); // Turn on the buzzer
+        printf("Buzzer enabled\n"); // Print status message
+    } else { // If the buzzer should be disabled
+        buzz_en = false; // Set the buzzer disabled flag
+        gpio_put(Buzz, 0); // Turn off the buzzer
+        printf("Buzzer disabled\n"); // Print status message
+    }
+}
+// Function to read the state of the left and right buttons
+void read_btn() {
+    static bool last_left_state = false; // Store the last state of the left button
+    static bool last_right_state = false; // Store the last state of the right button
+    // Get the current state of the left and right buttons
+    bool left_state = gpio_get(LBTN); // Read the state of the left button
+    bool right_state = gpio_get(RBTN); // Read the state of the right button
+    left_pressed = false; // Initialize left_pressed to false
+    right_pressed = false; // Initialize right_pressed to false
+    // Handle left button press
+    if (left_state && !last_left_state) {  // Detect press (not hold)
+        left_pressed = true; // Set left_pressed to true
+        // Check menu index to determine action
+        if (menu_index == 2 || menu_index == 4 || menu_index == 5 || menu_index == 6) {
+            if (selected_digit > 0) { 
+                selected_digit--;  // Move left if possible
+            } else {
+                selected_digit = 0; // Stay at 0 if already at the leftmost position
+            }
+        } else if (menu_index == 3) { // If in the unit selection menu
+            isImperial = false; // Set measurement system to metric
+        }
+    }
+    // Handle right button press
+    if (right_state && !last_right_state) {  // Detect press (not hold)
+        right_pressed = true; // Set right_pressed to true
+        // Check menu index to determine action
+        if (menu_index == 2 || menu_index == 4 || menu_index == 5 || menu_index == 6) {
+            if (selected_digit < 1) { 
+                selected_digit++;  // Move right if possible
+            } else {
+                selected_digit = 1; // Stay at 1 if already at the rightmost position
+            }
+        } else if (menu_index == 3) { // If in the unit selection menu
+            isImperial = true; // Set measurement system to imperial
+        }
+    }
+    // Update last known states for the next loop
+    last_left_state = left_state; // Store the current state of the left button
+    last_right_state = right_state; // Store the current state of the right button
+}
+// Function to handle  value update in submenu
+void encoder_isr(uint gpio, uint32_t events) {
+    static uint32_t last_update = 0;  // For debounce (in ms)
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    // Read the encoder A and B states
+    int A = gpio_get(ENCODER_A); 
+    int B = gpio_get(ENCODER_B);
+
+    // Debugging outputs for A and B
+    printf("[DEBUG] A: %d, B: %d\n", A, B);
+
+    // Track the number of pulses and direction (CW or CCW)
+    static int pulse_count = 0;
+    static int last_A = -1;  // To track changes in A state
+    static int last_B = -1;  // To track changes in B state
+
+    // Detect changes in A and B for pulse counting
+    if (A != last_A || B != last_B) {  // If either A or B has changed state
+        if (A == 1) {  // When A goes HIGH (change detected)
+            if (B == 1) {  // Clockwise direction (A leads B)
+                pulse_count++;  // Increment pulse count for CW
+                printf("[DEBUG] CW Pulse Count: %d\n", pulse_count);
+            } else {  // Counterclockwise direction (B leads A)
+                pulse_count--;  // Decrement pulse count for CCW
+                printf("[DEBUG] CCW Pulse Count: %d\n", pulse_count);
+            }
+        }
+        
+        // Every 4 pulses, update the menu index for CW rotation
+        if (pulse_count >= PULSES_PER_UPDATE) {
+            if (!in_submenu) {  // Only update menu index if in settings list
+                menu_index = (menu_index < 7) ? menu_index + 1 : 7; // Prevent exceeding max index
+                printf("[DEBUG] CW - Menu index: %d\n", menu_index);
+                pulse_count = 0;  // Reset pulse count after updating
+            }
+        } 
+        
+        // Every 4 pulses, update the menu index for CCW rotation
+        else if (pulse_count <= -PULSES_PER_UPDATE) {
+            if (!in_submenu) {  // Only update menu index if in settings list
+                menu_index = (menu_index > 0) ? menu_index - 1 : 0; // Prevent going below 0
+                printf("[DEBUG] CCW - Menu index: %d\n", menu_index);
+                pulse_count = 0;  // Reset pulse count after updating
+            }
+        }
+
+        // Store the current state of A and B for comparison in the next ISR
+        last_A = A;
+        last_B = B;
+    }
+
+    // Debugging output for menu index after pulse updates
+    printf("[DEBUG] Current Menu Index: %d\n", menu_index);
+}
+
+
+
+
+
+/*
+void encoder_isr(uint gpio, uint32_t events) {
+    static uint32_t last_update = 0;   // For debounce (in ms)
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    // Debounce: Only process if 10ms has passed since the last update
+    if (now - last_update < 10) {
+        return;  // Ignore if less than 10ms has passed
+    }
+    last_update = now;
+
+    uint32_t gpio_state = (gpio_get_all() >> 10) & 0b11;  // Read the encoder A and B states (assuming GPIO 10 and 11)
+    static int last_encoder_A = -1;
+    static int last_encoder_B = -1;
+
+    // Update encoder A and B states
+    int A = gpio_get(ENCODER_A); 
+    int B = gpio_get(ENCODER_B);
+    
+    // Detect changes in encoder A or B
+    if (A != last_encoder_A || B != last_encoder_B) {
+        if (!in_submenu) {  // Navigation mode: Update menu_index based on encoder turns
+            if (A == 0 && B == 1 && !cw_fall) {  // Clockwise turn on A
+                cw_fall = true;
+                menu_index = (menu_index < 7) ? menu_index + 1 : 7;  // Move menu index forward
+                printf("[ENCODER] CW - Menu index: %d\n", menu_index);
+                settingsdisplay(menu_index);  // Update display for the main menu
+                // Reset cw_fall after processing
+                cw_fall = false;
+            } else if (A == 0 && B == 0 && !ccw_fall) {  // Counterclockwise turn on B
+                ccw_fall = true;
+                menu_index = (menu_index > 0) ? menu_index - 1 : 0;  // Move menu index backward
+                printf("[ENCODER] CCW - Menu index: %d\n", menu_index);
+                settingsdisplay(menu_index);  // Update display for the main menu
+                // Reset ccw_fall after processing
+                ccw_fall = false;
+            }
+        } else {  // Submenu mode: Adjust settings corresponding to the current menu_index
+            if (menu_index == 2) {  // Submenu 2 - Auto Stop Length
+                if (A == 0 && B == 1 && !cw_fall) {  // Clockwise turn
+                    cw_fall = true;
+                    if (AutoStopLen[selected_digit] < 9) AutoStopLen[selected_digit]++;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset cw_fall after processing
+                    cw_fall = false;
+                } else if (A == 0 && B == 0 && !ccw_fall) {  // Counterclockwise turn
+                    ccw_fall = true;
+                    if (AutoStopLen[selected_digit] > 0) AutoStopLen[selected_digit]--;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset ccw_fall after processing
+                    ccw_fall = false;
+                }
+            } else if (menu_index == 4) {  // Submenu 4 - Max Speed
+                if (A == 0 && B == 1 && !cw_fall) {  // Clockwise turn
+                    cw_fall = true;
+                    if (MaxSpeed[selected_digit] < 9) MaxSpeed[selected_digit]++;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset cw_fall after processing
+                    cw_fall = false;
+                } else if (A == 0 && B == 0 && !ccw_fall) {  // Counterclockwise turn
+                    ccw_fall = true;
+                    if (MaxSpeed[selected_digit] > 0) MaxSpeed[selected_digit]--;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset ccw_fall after processing
+                    ccw_fall = false;
+                }
+            } else if (menu_index == 5) {  // Submenu 5 - Min Speed
+                if (A == 0 && B == 1 && !cw_fall) {  // Clockwise turn
+                    cw_fall = true;
+                    if (MinSpeed[selected_digit] < 9) MinSpeed[selected_digit]++;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset cw_fall after processing
+                    cw_fall = false;
+                } else if (A == 0 && B == 0 && !ccw_fall) {  // Counterclockwise turn
+                    ccw_fall = true;
+                    if (MinSpeed[selected_digit] > 0) MinSpeed[selected_digit]--;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset ccw_fall after processing
+                    ccw_fall = false;
+                }
+            } else if (menu_index == 6) {  // Submenu 6 - Spool Diameter
+                if (A == 0 && B == 1 && !cw_fall) {  // Clockwise turn
+                    cw_fall = true;
+                    if (SpoolDiameter[selected_digit] < 9) SpoolDiameter[selected_digit]++;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset cw_fall after processing
+                    cw_fall = false;
+                } else if (A == 0 && B == 0 && !ccw_fall) {  // Counterclockwise turn
+                    ccw_fall = true;
+                    if (SpoolDiameter[selected_digit] > 0) SpoolDiameter[selected_digit]--;
+                    selectedmenudisplay(menu_index);  // Update submenu display
+                    // Reset ccw_fall after processing
+                    ccw_fall = false;
+                }
+            }
+        }
+    }
+
+    // Update the last encoder states
+    last_encoder_A = A;
+    last_encoder_B = B;
+}*/
+
+// Function to check the state of the encoder button and handle button presses
+void check_encoder() {
+    static bool button_was_pressed = false; // Flag to track if the button was previously pressed
+    static uint32_t button_press_time = 0; // Timestamp for when the button was pressed
+    static bool button_pressed = false; // Flag to track if the button is currently pressed
+    // Check if encoder button is pressed (active high)
+    if (gpio_get(ENCODER_BTN) == 1) {
+        // Handle the button press
+        if (!button_pressed) { // If the button was not previously pressed
+            button_pressed = true; // Set button_pressed to true
+            button_press_time = time_us_32(); // Record the time of the button press
+        }
+        // Check for long press
+        else if ((time_us_32() - button_press_time > 3000000) && !button_was_pressed) {  // 3-second long press
+            in_settings_menu = true; // Enter settings menu
+            menu_index = 0; // Set menu index to 0
+            settingsdisplay(menu_index); // Display the settings menu
+            last_menu_index = menu_index; // Update last menu index
+            ignore_next_press = true; // Prevent accidental selection
+            button_was_pressed = true; // Mark button as pressed
+        }
+    } else {  // Button is released
+        if (button_pressed) {  // Button was pressed and is now released
+            uint32_t press_duration = time_us_32() - button_press_time; // Calculate press duration
+            // Check for short press
+            if (press_duration < 1000000) {  // Short press < 1 second
+                if (in_submenu) { // If currently in a submenu
+                    // Exit submenu
+                    in_submenu = false; // Update state to indicate exit from submenu
+                    settingsdisplay(menu_index);  // Update display to reflect exit
+                } else if (in_settings_menu) { // If currently in the settings menu
+                    // Handle entering submenu
+                    selected_menu = menu_index;  // Set selected_menu to current menu_index
+                    in_submenu = true; // Update state to indicate entry into submenu
+                    selectedmenudisplay(selected_menu);  // Update display to reflect submenu
+                }
+            } else {
+                // Handle case for long press if necessary (currently empty)
+            }
+            // Reset the state for the next button press
+            button_pressed = false; // Reset button pressed state
+            button_was_pressed = false;  // Allow future presses
+        }
+    }
+}
+// Function for Input and Output Set up
+void gpio_setup() {
+    // Encoder Reading
+    gpio_init(ENCODER_A);
+    gpio_set_dir(ENCODER_A, GPIO_IN);
+    gpio_pull_up(ENCODER_A); // pull-up resistor for encoder a
+    gpio_init(ENCODER_B);
+    gpio_set_dir(ENCODER_B, GPIO_IN);
+    gpio_pull_up(ENCODER_B); // pull-up resistor for encoder b
+    gpio_init(ENCODER_BTN);
+    gpio_set_dir(ENCODER_BTN, GPIO_IN);
+    gpio_pull_down(ENCODER_BTN); // pull-down for encoder button
+    gpio_set_irq_enabled_with_callback(ENCODER_A, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &encoder_isr);
+    gpio_set_irq_enabled(ENCODER_B, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
+    // Button Reading Left Then Right
+    gpio_init(LBTN);
+    gpio_set_dir(LBTN, GPIO_IN);
+    gpio_pull_down(LBTN); // Pull-down for Left Button
+    gpio_init(RBTN);
+    gpio_set_dir(RBTN, GPIO_IN);
+    gpio_pull_down(RBTN); //Pull-down for Right Button
+    // Buzzer Init
+    gpio_init(Buzz);
+    gpio_set_dir(Buzz, GPIO_OUT);
+}
+void screen_update (int linelength, int dragset) {
+    read_btn(); // check button state
+    check_encoder(); // check encoder button state
+    if (!in_settings_menu && !in_submenu) {
+        if (linelength != last_linelength || dragset != last_dragset) {
+            cfa634_main(linelength, dragset);
+            last_linelength = linelength;  // Store the new values
+            last_dragset = dragset;
+        }
+    }
+    // In settings mode: if in a subpage, check for exit, otherwise check for subpage entry.
+    if (in_settings_menu) {
+        //printf("[DEBUG] In settings menu - Menu Index: %d\n", menu_index);
+        if (in_submenu) {
+            if (menuActive) {
+                selectedmenudisplay(selected_menu);
+            }
+        } else {
+            if (menu_index != last_menu_index) {
+                settingsdisplay(menu_index);
+                last_menu_index = menu_index;
+            }
+        }
+    }
+    sleep_ms(100);
+
+}
+void screen_setup(){
+    stdio_init_all();
+    i2c_setup();
+    gpio_setup();
+    sleep_ms(500); // Wait for LCD to power up
+    cfa634_clear_screen();
+}
+int main() {
+    screen_setup();
+    int linelength = 0;
+    int dragset = 0;
+    while (1) {
+        screen_update(linelength, dragset);
+    }
+}
