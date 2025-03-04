@@ -2,64 +2,49 @@
 #include "hardware/pwm.h"
 #include "hardware/adc.h"
 
-//Initializing pins
-#define PWM_PIN 20         // Pin for PWM output (changed to GPIO 6)
-#define POT_PIN 26        // Pin for potentiometer (ADC0)
+// Pin Definitions
+#define PWM_PIN 20       // PWM output pin
+#define POT_PIN 26       // Potentiometer ADC input
 
-//Initializing the PWM function and setting the output GPIO pin
-void setup_pwm() {
-    //selecting which GPIO pin the PWM function goes out of 
-    gpio_set_function(PWM_PIN, GPIO_FUNC_PWM);
+// PWM resolution
+#define PWM_RESOLUTION 65535 // Use full 16-bit range
 
-    // Gets the slice number associated with the PWM GPIO pin for PWM functionality
-    uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
-
-
-    pwm_set_wrap(slice_num, 255); 
-
+// Function to initialize PWM
+void setup_pwm(uint gpio_pin) {
+    gpio_set_function(gpio_pin, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(gpio_pin);
+    pwm_set_wrap(slice_num, PWM_RESOLUTION); // Full range 0-65535
+    pwm_set_chan_level(slice_num, pwm_gpio_to_channel(gpio_pin), 0);
     pwm_set_enabled(slice_num, true);
 }
 
-    // Read potentiometer value (ADC) and returns that value
+// Function to read ADC value
 uint16_t read_potentiometer() {
-    // Read potentiometer value (ADC) 
-    uint16_t adc_value = adc_read();
-    // Returning that value
-    return adc_value;
+    return adc_read();
 }
 
 int main() {
-    // Initialize stdio and ADC
     stdio_init_all();
     adc_init();
-
-    // Select the potentiometer pin (ADC0) for the adc input
     adc_gpio_init(POT_PIN);
     adc_select_input(0);
 
-    // calling the pwm function
-    setup_pwm();
+    // Setup PWM
+    setup_pwm(PWM_PIN);
 
     while (true) {
-        // setting the potentiometer value potentiometer value (0-4095)
         uint16_t pot_value = read_potentiometer();
+        uint16_t duty_cycle = (pot_value * PWM_RESOLUTION) / 4095; // Scale to 16-bit
 
-        // Scale potentiometer value to 0-255 for PWM duty cycle
-        uint8_t duty_cycle = (pot_value * 255) / 4095;  // Scale to 8-bit
-
-        // Set PWM slices to set output PWM duty cycle
         uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
-        pwm_set_chan_level(slice_num, PWM_CHAN_A, duty_cycle); // Set duty cycle for channel A
+        pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), duty_cycle);
 
-        // Value Conversions and Print
-        const float conversion_factor = 3.3f / (1 << 12);
-        const float DC_CONV = 100.0f / (1 << 12);
-        uint16_t result = adc_read();
-        printf("Raw value: 0x%03x, voltage: %f V\n, Duty Cycle: %f" , result, result * conversion_factor, result * DC_CONV);
+        // Print values
+        float voltage = pot_value * (3.3f / 4095.0f);
+        float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
+        printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
         
-        // Wait a bit before reading again
-        sleep_ms(100);
+        sleep_ms(250);
     }
-
     return 0;
 }
