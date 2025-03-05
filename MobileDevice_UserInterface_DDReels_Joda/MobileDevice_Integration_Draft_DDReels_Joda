@@ -1,37 +1,62 @@
 /*
  * ----------------------------------------------------------------------
- * DDReels Mobile Device - Encoder-Based Settings Navigation with UI
+ * DDReels Mobile Device - Encoder-Based Settings Navigation with UI (Updated)
  * Project: Dynamic Drag Reels (D.D. Reels)
  * Author: Gabriel Joda / Modified by ChatGPT
  * Platform: Raspberry Pi Pico W
- * Purpose: Implements rotary encoder-driven settings navigation and adjustments.
- *
- *          Key Features:
- *            - Rotary encoder controls menu selection with real-time updates.
- *            - Debounce logic ensures glitch-free movement and selection.
- *            - Long press detection allows seamless entry/exit of settings.
- *            - Submenus enable fine-tuned adjustments for key parameters:
- *                 - Reel-Up Speed (displayed as a percentage)
- *                 - Auto Stop Length (ft in Imperial; m in Metric)
- *                 - Metric/Imperial mode toggle (converts units on display)
- *                 - Alarm On/Off toggle (disables buzzer when off)
- *                 - Contrast (0-100%, controlled via GPIO 21 PWM)
- *                 - Brightness (0-100%, controlled via GPIO 22 PWM)
- *                 - Save settings
- *            - Main screen displays remaining reel length (200ft – auto stop length)
- *              and an independent drag value (converted to N·m in metric mode).
- *            - LCD updates only when necessary to optimize efficiency.
- *            - LED and button feedback system for better user interaction.
- *            - Expandable framework to support future feature integration.
- *
- *          Status: Navigation works; in metric mode auto stop length is converted
- *                  and drag is displayed. Contrast and Brightness settings use PWM,
- *                  with contrast mapped to an output that—after a 0.6V drop—ranges
- *                  from about 2V to 2.4V.
- *                  (resistor and capacitor needs to be updated for both
- *                  contrast and brightness)
+ * 
+ * Purpose:
+ *   Implements rotary encoder-driven settings navigation and adjustments with
+ *   enhanced icon management and display features.
+ * 
+ * Key Features and Updates:
+ *   - Rotary encoder controls menu selection with real-time updates and
+ *     robust debounce logic.
+ *   - Long press detection to seamlessly enter and exit settings.
+ *   - Submenus for fine-tuning key parameters:
+ *         • Reel-Up Speed (displayed as a percentage)
+ *         • Auto Stop Length (ft in Imperial; m in Metric)
+ *         • Metric/Imperial toggle (unit conversion on display)
+ *         • Alarm On/Off toggle (disables buzzer when off)
+ *         • Contrast (0–100%, controlled via GPIO 21 PWM)
+ *         • Brightness (0–100%, controlled via GPIO 22 PWM; default updated to 100%)
+ *         • Save settings
+ *   - Main screen displays remaining reel length (200ft – auto stop length)
+ *     and an independent drag value (converted to N·m in metric mode).
+ *   - LCD updates occur only when necessary to optimize efficiency.
+ *   - LED and button feedback system for improved user interaction.
+ *   - Expanded framework to support future feature integration.
+ * 
+ * Enhancements:
+ *   - Added a custom Bluetooth icon created via CGRAM (function create_bluetooth_char)
+ *     using the following 5x8 pixel pattern:
+ *         Row 0: 00100 (0x04)
+ *         Row 1: 10110 (0x16)
+ *         Row 2: 01101 (0x0D)
+ *         Row 3: 00110 (0x06)
+ *         Row 4: 00110 (0x06)
+ *         Row 5: 01101 (0x0D)
+ *         Row 6: 10110 (0x16)
+ *         Row 7: 00100 (0x04)
+ *     This icon is displayed on the leftmost side of line 4 of the LCD.
+ * 
+ *   - Implemented a generic update_icon() function using an IconMode enumeration
+ *     (ICON_CLEAR, ICON_SOLID, ICON_BLINK) to easily control icon states.
+ * 
+ *   - Introduced update_battery_icon() to display a full battery icon (using SEGRAM
+ *     address 0x0F with data 0x1F), laying the groundwork for future dynamic battery
+ *     monitoring.
+ * 
+ *   - Refined PWM mapping for contrast and brightness, with brightness now defaulting
+ *     to 100%.
+ * 
+ * Status:
+ *   Navigation and settings adjustment work as before. The UI now features dynamic
+ *   icon handling (for Bluetooth, battery, and alarm states) and improved visual feedback,
+ *   with modular routines in place to support further enhancements.
  * ----------------------------------------------------------------------
  */
+
 
  #include <stdio.h>
  #include <string.h>
@@ -39,6 +64,14 @@
  #include "hardware/gpio.h"
  #include "hardware/pwm.h"
  
+ // Function to update an icon on the LCD.
+ typedef enum {
+     ICON_CLEAR,  // Clear the icon (off)
+     ICON_SOLID,  // Display the solid version of the icon
+     ICON_BLINK   // Display the blinking version of the icon
+ } IconMode;
+
+
  // =========================
  // New PWM Settings for Contrast & Brightness
  // =========================
@@ -51,7 +84,7 @@
  
  // New global variables for contrast and brightness (0–100%).
  int contrast_value = 50;    // Default 50% --> After mapping, output voltage ~? (see math below)
- int brightness_value = 50;  // Default 50%
+ int brightness_value = 100;  // Default 100%
  
  // =========================
  // Other Project Constants & Variables
@@ -106,6 +139,11 @@
  
  // Flag from the ISR to indicate that the subpage display needs updating.
  volatile bool update_subpage_flag = false;
+
+ // Flag for Icons
+ volatile bool alarm_icon_update_needed = false;
+ volatile IconMode desired_alarm_icon_mode = ICON_CLEAR;
+
  
  // =========================
  // LCD Helper Functions
@@ -158,6 +196,10 @@
      sleep_ms(10);
      lcd_send_command(0x09); // Icon display on.
      sleep_ms(5);
+     lcd_send_command(0x40); // Set SEGRAM address to 0x00 (Icon RAM)
+     for (int i = 0; i < 16; i++) { // Initialize icons
+     lcd_send_data(0x00); // Write 0x00 to clear each icon slot
+     }
      lcd_send_command(0x30); // Back to basic instruction set.
      sleep_ms(10);
      lcd_send_command(0x0C); // Display on, cursor off.
@@ -192,7 +234,7 @@
  // =========================
  // Display Functions
  // =========================
- 
+
  // Main screen display function.
  // In metric mode, it converts auto stop length from feet to meters and drag from ft-lbs to N·m.
  // In imperial mode, the remaining reel length is computed as FULL_REEL_LENGTH - stop_length.
@@ -208,6 +250,8 @@
          lcd_print_centered(line1, 1);
          lcd_print_centered(line2, 2);
          lcd_print_centered(line3, 3);
+         lcd_send_command(0x80 | 0x60);  // Set cursor to the leftmost position of line 4
+         lcd_send_data(0);               // Print the custom character stored in slot 0
      } else {
          int remaining = FULL_REEL_LENGTH - stop_length; // Remaining reel length.
          char line1[21], line2[21], line3[21];
@@ -217,10 +261,12 @@
          lcd_print_centered(line1, 1);
          lcd_print_centered(line2, 2);
          lcd_print_centered(line3, 3);
+         lcd_send_command(0x80 | 0x60);  // Set cursor to the leftmost position of line 4
+         lcd_send_data(0);               // Print the custom character stored in slot 0
      }
      printf("[LCD] Main Screen Displayed.\n");
  }
- 
+
  // Displays the settings menu.
  // The menu now contains seven options:
  // 1. Reel-Up Speed
@@ -254,7 +300,56 @@
      }
      printf("[LCD] Settings Menu Item: %s\n", menu_items[index]);
  }
- 
+
+void update_icon(uint8_t icon_index, IconMode mode) {
+    uint8_t data;
+    // Choose the data byte based on the mode.
+    // According to the datasheet:
+    // - Solid icon data is typically 0x10.
+    // - Blinking icon data is typically 0x50.
+    // - Clearing uses 0x00.
+    switch(mode) {
+        case ICON_SOLID:
+            data = 0x10;
+            break;
+        case ICON_BLINK:
+            data = 0x50;
+            break;
+        case ICON_CLEAR:
+        default:
+            data = 0x00;
+            break;
+    }
+    // Use extended mode (0x36) to access the icon RAM,
+    // then set the SEGRAM address (base 0x40 ORed with icon index),
+    // write the data byte, and finally return to basic mode (0x30).
+    lcd_send_command(0x36);  
+    lcd_send_command(0x40 | (icon_index & 0x0F));
+    lcd_send_data(data);
+    lcd_send_command(0x30);
+}
+ void update_battery_icon(void) {
+     // For now, assume battery is always at 100%.
+     // According to your specification:
+     //   - The SEGRAM address should be $0F (command: 0x40 | 0x0F).
+     //   - The data for a solid (full) battery icon should be $1F.
+     lcd_send_command(0x36);         // Switch to extended mode (RE=1).
+     lcd_send_command(0x40 | 0x0F);    // Set SEGRAM address to $0F.
+     lcd_send_data(0x1F);            // Write solid battery icon data.
+     lcd_send_command(0x30);         // Return to basic mode (RE=0).
+ }
+void create_bluetooth_char(void) {
+    // Set CGRAM address to 0 (for custom character 0).
+    lcd_send_command(0x40);
+    lcd_send_data(0x04);  // Row 0: 00100
+    lcd_send_data(0x16);  // Row 1: 10110
+    lcd_send_data(0x0D);  // Row 2: 01101
+    lcd_send_data(0x06);  // Row 3: 00110
+    lcd_send_data(0x06);  // Row 4: 00110
+    lcd_send_data(0x0D);  // Row 5: 01101
+    lcd_send_data(0x16);  // Row 6: 10110
+    lcd_send_data(0x04);  // Row 7: 00100
+}
  // =========================
  // Subpage Functions
  // =========================
@@ -363,8 +458,12 @@
                  in_settings_menu = false;
                  lcd_send_command(0x01);
                  lcd_print_centered("Saving...", 2);
+                 // Update icon slot 6 to display a blinking icon.
+                 // Here, 0x50 is used as an example for the blink data.
+                 update_icon(6, ICON_BLINK);
                  sleep_ms(1000);
                  display_main_screen();
+                 update_icon(6, ICON_CLEAR);
                  printf("[SAVE] Returned to main screen after saving.\n");
              } else {
                  // Open the corresponding subpage.
@@ -494,6 +593,8 @@
                      ccw_fall = false;
                      cw_fall = false;
                      alarm_enabled = true;
+                     desired_alarm_icon_mode = ICON_CLEAR;
+                     alarm_icon_update_needed = true;
                      printf("[SUBPAGE] Alarm Enabled.\n");
                  }
              } else if (gpio == ENCODER_B) {
@@ -502,6 +603,8 @@
                      cw_fall = false;
                      ccw_fall = false;
                      alarm_enabled = false;
+                     desired_alarm_icon_mode = ICON_SOLID;
+                     alarm_icon_update_needed = true;
                      printf("[SUBPAGE] Alarm Disabled.\n");
                  }
              }
@@ -533,7 +636,7 @@
              //   V_out = 2.6 V + (contrast_value/100)*0.4 V.
              // Then, PWM level = (V_out/3.3) * 65535.
              pwm_set_gpio_level(CONTRAST_PWM_PIN,
-                 (uint16_t)(((2.6f + (contrast_value / 100.0f) * 0.4f) / 3.3f) * 65535));
+                 (uint16_t)(((1.8f + (contrast_value / 100.0f) * 0.8f) / 3.3f) * 65535));
          } else if (menu_index == 5) { // Brightness.
              if (gpio == ENCODER_A) {
                  if (!cw_fall && (gpio_state == 0b10)) { cw_fall = true; }
@@ -589,12 +692,14 @@
  void handle_buttons(void) {
      if (gpio_get(BUTTON_26)) {
          gpio_put(LED_28, 1);
+         update_icon(1, ICON_SOLID);
          if (alarm_enabled)
              gpio_put(LED_13, 1);
      }
      if (gpio_get(BUTTON_14)) {
          gpio_put(LED_28, 0);
          gpio_put(LED_13, 0);
+         update_icon(1, ICON_CLEAR);
      }
      static uint32_t button_15_press_time = 0;
      static bool led_27_on = false;
@@ -604,6 +709,7 @@
              button_15_press_time = to_ms_since_boot(get_absolute_time());
          } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 3000 && !led_27_on) {
              gpio_put(LED_27, 1);
+             update_icon(0x0C, ICON_BLINK);
              led_27_on = true;
              button_15_released = false;
          }
@@ -611,6 +717,8 @@
          if (button_15_press_time > 0) {
              if (!led_27_on) {
                  gpio_put(LED_27, 0);
+                 update_icon(0x0C, ICON_CLEAR);
+
              } else {
                  led_27_on = false;
              }
@@ -654,7 +762,7 @@
      // Therefore, PWM must produce 2.6 V to 3.0 V.
      // V_out = 2.6 + (contrast_value/100)*0.4, then duty cycle = V_out / 3.3.
      pwm_set_chan_level(slice_contrast, pwm_gpio_to_channel(CONTRAST_PWM_PIN),
-         (uint16_t)(((2.6f + (contrast_value / 100.0f) * 0.4f) / 3.3f) * 65535));
+         (uint16_t)(((1.8f + (contrast_value / 100.0f) * 0.8f) / 3.3f) * 65535));
      pwm_set_enabled(slice_contrast, true);
      
      // Set up PWM for Brightness on GPIO 22.
@@ -688,15 +796,35 @@
      gpio_set_dir(LED_27, GPIO_OUT);
      gpio_put(LED_27, 0);
  }
-  
+  // Initializes the PWM outputs for both contrast and brightness to the default 50% setting.
+void init_pwm_display_settings(void) {
+    // For Contrast:
+    // We want the effective (filtered) voltage to be between 2.0V and 2.4V after a 0.6V drop.
+    // Therefore, the PWM must output between 2.6V and 3.0V.
+    // The mapping: V_out = 2.6V + (contrast_value/100) * 0.4V.
+    // For contrast_value = 50, V_out = 2.6 + 0.5*0.4 = 2.6 + 0.2 = 2.8 V.
+    // The duty cycle is then 2.8/3.3, and the PWM level is that fraction times 65535.
+    uint slice_contrast = pwm_gpio_to_slice_num(CONTRAST_PWM_PIN);
+    uint16_t contrast_level = (uint16_t)(((1.8f + (contrast_value / 100.0f) * 0.8f) / 3.3f) * 65535);
+    pwm_set_chan_level(slice_contrast, pwm_gpio_to_channel(CONTRAST_PWM_PIN), contrast_level);
+    // For Brightness:
+    // Brightness uses the full 0–100% range. At 50% the duty cycle is 0.5.
+    uint slice_brightness = pwm_gpio_to_slice_num(BRIGHTNESS_PWM_PIN);
+    uint16_t brightness_level = (uint16_t)((brightness_value / 100.0f) * 65535);
+    pwm_set_chan_level(slice_brightness, pwm_gpio_to_channel(BRIGHTNESS_PWM_PIN), brightness_level);
+}
+
  // --- Main Loop ---
  int main(void) {
      stdio_init_all();
      sleep_ms(2000);
      printf("[SYSTEM] Starting...\n");
      gpio_setup();
+     init_pwm_display_settings();
      lcd_init();
      display_main_screen();
+     update_battery_icon();
+     create_bluetooth_char();
      while (1) {
          // If not in settings mode, check for a long press to enter settings.
          if (!in_settings_menu) {
@@ -718,6 +846,12 @@
          if (in_submenu && update_subpage_flag) {
              update_subpage(menu_index);
              update_subpage_flag = false;
+         }
+
+         // If Icon needs to be updated it will be flagged
+         if (alarm_icon_update_needed) {
+             update_icon(9, desired_alarm_icon_mode); // Use the appropriate icon slot.
+             alarm_icon_update_needed = false;
          }
          handle_buttons();
          sleep_ms(50);
