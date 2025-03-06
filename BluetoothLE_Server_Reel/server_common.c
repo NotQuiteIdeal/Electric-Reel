@@ -4,6 +4,22 @@
 #include "Reel.h"
 #include "pico/time.h"
 
+#define PING_CHAR_VALUE_HANDLE          0x0020
+#define PING_CHAR_CCCD_HANDLE           0x0021
+#define LINE_LENGTH_CHAR_VALUE_HANDLE   0x0009
+#define LINE_LENGTH_CHAR_CCCD_HANDLE    0x000a
+#define DRAG_SET_CHAR_VALUE_HANDLE      0x000c
+#define DRAG_SET_CHAR_CCCD_HANDLE       0x000d
+#define MOTOR_STATUS_CHAR_VALUE_HANDLE  0x0010
+#define MOTOR_STATUS_CHAR_CCCD_HANDLE   0x0011
+#define MOTOR_SPEED_VALUE_HANDLE        0x0013
+#define MOTOR_SPEED_CCCD_HANDLE         0x0014
+#define FISH_ALARM_VALUE_HANDLE         0x0016
+#define FISH_ALARM_CCCD_HANDLE          0x0017
+#define AUTO_STOP_LENGTH_VALUE_HANDLE   0x0019
+#define AUTO_STOP_LENGTH_CCCD_HANDLE    0x001a
+#define MEASUREMENT_SYtSEM_VALUE_HANDLE 0x001c
+#define MEASUREMENT_SYSTEM_CCCD_HANDLE  0x001d
 
 extern const uint8_t profile_data[];
 
@@ -18,7 +34,6 @@ static uint8_t adv_data[] = {
 static const uint8_t adv_data_len = sizeof(adv_data);
 
 // Bluetooth connection state
-int le_notification_enabled = 0;
 hci_con_handle_t con_handle = 0;
 
 // Reel characteristic values
@@ -31,55 +46,44 @@ uint8_t fish_alarm = 0;
 // Variables for testing ping
 absolute_time_t ping_received_time;
 static uint32_t received_ping_count = 0;
-static uint32_t ping_sent_time = 0;
+static uint64_t ping_sent_time = 0;
+uint8_t ping_test_status = 0;
 static btstack_timer_source_t refresh_timer;
+bool refresh_timer_started = false;
+int ping_rate_count = 0;
 
 // Update flag for external updates
 volatile int send_update_flag = 0;
 
 // Function to send a ping notification
 void send_ping_notification() {
-    if (le_notification_enabled) {
-        absolute_time_t current_time = get_absolute_time();
-        ping_sent_time = to_us_since_boot(current_time);
 
-        printf("Sent Ping Request at: %llu us\n", ping_sent_time);
+    if (ping_test_status != 1) {
+        printf("Skipping final ping, test is done.\n");
+        return;
+    }
 
-        uint8_t status = att_server_indicate(con_handle, ATT_CHARACTERISTIC_a4b7e118_7b77_4ef9_a618_967a2842e630_01_VALUE_HANDLE, (uint8_t*)&ping_sent_time, sizeof(ping_sent_time));
+    absolute_time_t current_time = get_absolute_time();
+    ping_sent_time = to_us_since_boot(current_time);
 
-        printf("Ping Indication status: %d\n", status);
+    printf("Sent Ping Request at: %llu us\n", ping_sent_time);
+
+    uint8_t status = att_server_notify(con_handle, PING_CHAR_VALUE_HANDLE, (uint8_t*)&ping_sent_time, sizeof(ping_sent_time));
+
+    if (status == 0) {
+        printf("Ping Notification successfully sent.\n");
+        ping_test_status = 1; // Prevents sending another ping until response is received
+    } else {
+        printf("Ping Notification failed! Status: %d\n", status);
     }
 }
-
 
 void send_ble_updates() {
-    if (le_notification_enabled) {
-        att_server_notify(con_handle, ATT_CHARACTERISTIC_1476a75a_2c6d_4649_8819_bb830daaa603_01_VALUE_HANDLE, (uint8_t*)&line_length, sizeof(line_length));
-        att_server_notify(con_handle, ATT_CHARACTERISTIC_950e9e70_c453_4505_87e3_9dd6db626cc1_01_VALUE_HANDLE, (uint8_t*)&drag_set, sizeof(drag_set));
-        att_server_notify(con_handle, ATT_CHARACTERISTIC_d966cdb4_f14c_4113_adb4_8c9925a29c52_01_VALUE_HANDLE, (uint8_t*)&motor_status, sizeof(motor_status));
-        att_server_notify(con_handle, ATT_CHARACTERISTIC_cb8822a5_38c0_41fd_8c2b_d33fde778187_01_VALUE_HANDLE, (uint8_t*)&motor_speed, sizeof(motor_speed));
-        att_server_notify(con_handle, ATT_CHARACTERISTIC_d45efe09_1eee_47a7_9026_0c4152740a66_01_VALUE_HANDLE, (uint8_t*)&fish_alarm, sizeof(fish_alarm));
-    }
-}
-
-// Function to print refresh rate
-void update_refresh_rate(btstack_timer_source_t *ts) {
-    printf("Refresh Rate: %u pings per second\n", received_ping_count);
-    
-    // Reset the counter for the next measurement
-    received_ping_count = 0;
-
-    // Restart the timer for the next update
-    btstack_run_loop_set_timer(ts, 1000);
-    btstack_run_loop_add_timer(ts);
-}
-
-
-// Call this function every second
-void start_refresh_rate_timer() {
-    btstack_run_loop_set_timer(&refresh_timer, 1000); // 1-second interval
-    btstack_run_loop_set_timer_handler(&refresh_timer, update_refresh_rate);
-    btstack_run_loop_add_timer(&refresh_timer);
+    att_server_notify(con_handle, LINE_LENGTH_CHAR_VALUE_HANDLE, (uint8_t*)&line_length, sizeof(line_length));
+    att_server_notify(con_handle, DRAG_SET_CHAR_VALUE_HANDLE, (uint8_t*)&drag_set, sizeof(drag_set));
+    att_server_notify(con_handle, MOTOR_STATUS_CHAR_VALUE_HANDLE, (uint8_t*)&motor_status, sizeof(motor_status));
+    att_server_notify(con_handle, ATT_CHARACTERISTIC_cb8822a5_38c0_41fd_8c2b_d33fde778187_01_VALUE_HANDLE, (uint8_t*)&motor_speed, sizeof(motor_speed));
+    att_server_notify(con_handle, ATT_CHARACTERISTIC_d45efe09_1eee_47a7_9026_0c4152740a66_01_VALUE_HANDLE, (uint8_t*)&fish_alarm, sizeof(fish_alarm));
 }
 
 // Packet handler for BLE events
@@ -118,14 +122,9 @@ void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint
             gap_advertisements_enable(1); // Ensure Advertising is enabled
             break;
 
-        case HCI_EVENT_DISCONNECTION_COMPLETE: // Covers disconnection and timeout
-            le_notification_enabled = 0;
-            break;
-
-        case ATT_EVENT_CAN_SEND_NOW: // Checks if event is 
-            if (le_notification_enabled) {
-                att_server_notify(con_handle, ATT_CHARACTERISTIC_1476a75a_2c6d_4649_8819_bb830daaa603_01_VALUE_HANDLE, (uint8_t*)&line_length, sizeof(line_length));
-                att_server_notify(con_handle, ATT_CHARACTERISTIC_950e9e70_c453_4505_87e3_9dd6db626cc1_01_VALUE_HANDLE, (uint8_t*)&drag_set, sizeof(drag_set));
+        case ATT_EVENT_CAN_SEND_NOW:
+            if (ping_test_status == 1) {
+                send_ping_notification();
             }
             break;
         
@@ -139,21 +138,27 @@ void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint
         
                 // Request a faster connection interval
                 printf("Client Connected! Requesting faster connection interval...\n");
-                gap_request_connection_parameter_update(con_handle, 6, 12, 0, 200); 
+                gap_request_connection_parameter_update(con_handle, 16, 32, 0, 200); 
                 // Min: 10ms (8*1.25ms), Max: 20ms (16*1.25ms)
-        
+
+                printf("Waiting for client write before beginning tests...\n");
+                
+                /* Temporarily removed for testing other ping route
                 // Record the start time
                 absolute_time_t start_time = get_absolute_time();
                 ping_sent_time = to_us_since_boot(start_time);
+                ping_test_status = 1;
         
                 printf("Starting Ping Test at: %u us\n", ping_sent_time);
-        
-                // Start sending pings
-                send_ping_notification();
+                
+                if (ping_test_status == 1) {
+                    // Start sending pings
+                    send_ping_notification();
+                    ping_test_status = 2;
+                }
+                */
             }
             break;
-        
-        
         
         default:
             break;
@@ -188,58 +193,45 @@ uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t att_hand
     return 0;
 }
 
-
 // Handle BLE Write Requests
 int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size) {
-    if (attribute_handle == 0x018) { //Checks if Characteristic
-        uint16_t cccd_value = little_endian_read_16(buffer, 0);
-        if (cccd_value == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_INDICATION) {
-            le_notification_enabled = 1;
-            printf("Client enabled indications!\n");
-        } else {
-            le_notification_enabled = 0;
-            printf("Client disabled indications.\n");
+    printf("Received write on handle: 0x%04X\n", attribute_handle);
+    if (attribute_handle == PING_CHAR_VALUE_HANDLE) {
+        if (ping_test_status == 1) {
+            absolute_time_t server_received_time = get_absolute_time();
+            uint32_t server_timestamp = to_us_since_boot(server_received_time);
+
+            uint32_t round_trip_time = (server_timestamp > ping_sent_time) ? (server_timestamp - ping_sent_time) : 0;
+
+            printf("Received Ping Response from Client!\n");
+            printf("Round-trip time: %u us (%.3f ms)\n", round_trip_time, round_trip_time / 1000.0);
+            ping_rate_count++;
+            printf("%d\n", ping_rate_count);
         }
-        return 0; // Successfully handled CCCD write
-    }
-
-    if (attribute_handle == 0x0017) {  
         
-        // Get the server's current timestamp when receiving the response
-        absolute_time_t server_received_time = get_absolute_time();
-        uint32_t server_timestamp = to_us_since_boot(server_received_time);
-
-        // Calculate the round-trip time
-        uint32_t round_trip_time = server_timestamp - ping_sent_time;
-
-        printf("Received Ping Response from Client!\n");
-        printf("Round-trip time: %u us (%.3f ms)\n", round_trip_time, round_trip_time / 1000.0);
-        
-        received_ping_count++;
-        
-        uint8_t new_ping_value = 1;  // Keep sending a value
-        printf("Pinging!\n");
-        send_ping_notification();
-
-        uint8_t data_to_send = 42;
-        att_server_notify(connection_handle, attribute_handle, &data_to_send, sizeof(data_to_send));
-
         if (buffer_size > 0) {
-            printf("Client sent value: %02X\n", buffer[0]);
+            printf("Received write on handle: 0x%04X, Value: %02X\n", attribute_handle, buffer[0]);
         } else {
             printf("WARNING: Empty write received from client!\n");
         }
-        
-        // Start the refresh rate timer
-        start_refresh_rate_timer();
     }
-    if (attribute_handle == 0x001a) { // Handle for ping rate tester only
-        received_ping_count++;
+    if (attribute_handle == PING_CHAR_CCCD_HANDLE) {
+        if (buffer_size == 2) {
+            uint16_t cccd_value = little_endian_read_16(buffer, 0);
+
+            // Check if any\thing is enabled (0x0001 for notifications, 0x0002 for indications)
+            if (cccd_value & GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION) {
+                printf("Client subscribed to notifications for Ping Characteristic.\n");
+                
+                
+                ping_test_status = 1;
+            } else {
+                printf("Client unsubscribed from notifications.");
+                ping_test_status = 0;
+            }
+        }
     }
+    
     return 0;
 }
-
-
-
-
 
