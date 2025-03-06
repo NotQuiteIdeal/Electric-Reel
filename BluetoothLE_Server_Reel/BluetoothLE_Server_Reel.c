@@ -15,20 +15,40 @@ extern uint16_t drag_set;
 extern uint8_t motor_status;
 extern uint8_t motor_speed;
 extern uint8_t fish_alarm;
+extern uint8_t ping_test_status;
+extern int ping_rate_count;
+bool ping_start = false;
+struct repeating_timer timer2;
 
 // Bluetooth connection handle
 extern hci_con_handle_t con_handle;
 extern int le_notification_enabled;
 extern volatile int send_update_flag;  // External update trigger
 
-// Timer callback to send pings
-bool ping_timer_callback(struct repeating_timer *t) {
-    send_ping_notification();
-    return true;  // Keep the timer running
+
+bool ping_rate_callback(struct repeating_timer *q) {
+    ping_test_status = 2; // Indicates that ping test is complete
+    return false;
 }
 
-
-
+// Timer callback to send pings
+bool ping_timer_callback(struct repeating_timer *t) {
+    if (ping_test_status == 1 && ping_start == false) {
+        ping_start = true;
+        bool ok = add_repeating_timer_ms(5000, ping_rate_callback, NULL, &timer2);
+        printf("Timer started? %d\n", ok); // 1 if started, 0 if failed
+    }
+    if (ping_test_status == 1) {
+        att_server_request_can_send_now_event(con_handle);
+    }
+    if (ping_test_status == 2) {
+        float ping_rate = ping_rate_count / 5.0;
+        printf("Ping test concluded! Average ping rate per second: %.2f\n", ping_rate);
+        ping_test_status = 3;
+        return false;
+    }
+    return true;
+}
 
 int main() {
     stdio_init_all();
@@ -56,8 +76,9 @@ int main() {
     printf("Bluetooth LE Server Running!\n");
 
     // Set up a repeating hardware timer to request BLE updates every 200ms
-    struct repeating_timer timer;
-    add_repeating_timer_ms(-200, ping_timer_callback, NULL, &timer);
+    struct repeating_timer timer1;
+    add_repeating_timer_ms(-175, ping_timer_callback, NULL, &timer1);
+
     
     // Main loop to update values
     while (true) {
