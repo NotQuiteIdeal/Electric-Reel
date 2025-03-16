@@ -278,13 +278,13 @@
  // 7. Save Settings
  void display_settings_menu(int index) {
      const char *menu_items[] = {
-         "1.Reel-Up Speed",
-         "2.Auto Stop Length",
-         "3.Metric/Imperial",
-         "4.Turn off Alarm",
-         "5.Contrast",
-         "6.Brightness",
-         "7.Save Settings"
+         " 1.Reel-Up Speed",
+         " 2.Auto Stop Length",
+         " 3.Metric/Imperial",
+         " 4.Turn off Alarm",
+         " 5.Contrast",
+         " 6.Brightness",
+         " 7.Save Settings"
      };
      int start_index = index >= 4 ? index - 3 : 0;
      lcd_send_command(0x01); // Clear display.
@@ -293,8 +293,8 @@
          if (start_index + i < 7) {
              lcd_print(menu_items[start_index + i]);
              if (start_index + i == index) {
-                 lcd_send_command(0x80 | ((i * 0x20) + 19));
-                 lcd_print("<");
+                 lcd_send_command(0x80 | ((i * 0x20)));
+                 lcd_print(">");
              }
          }
      }
