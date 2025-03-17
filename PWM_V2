@@ -10,8 +10,8 @@
 #define PWM_RESOLUTION 65535  // Full 16-bit range
 
 // Define min and max duty cycle limits (default values)
-volatile uint16_t min_duty = 16384; // 25% duty cycle
-volatile uint16_t max_duty = 49152; // 75% duty cycle
+volatile uint16_t min_duty = 0; // 0% duty cycle
+volatile uint16_t max_duty = 65000; // 95% duty cycle
 
 // Function to initialize PWM
 void setup_pwm(uint gpio_pin) {
@@ -65,9 +65,9 @@ int main() {
         // Print values
         float voltage = pot_value * (3.3f / 4095.0f);
         float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
-        printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
+        //printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
         
-        sleep_ms(250);
+        sleep_ms(100);
 
         // Example: Dynamically update limits (could be triggered by a button/UART)
         // Uncomment this line to change limits dynamically during execution
