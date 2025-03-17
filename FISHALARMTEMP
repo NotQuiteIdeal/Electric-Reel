@@ -1,0 +1,15 @@
+#define Buzz 8 // buzzer
+volatile bool buzz_en = false; // store if buzzer is enabled
+void set_buzzer_state(bool state) {
+    if (state) { // If the buzzer should be enabled
+        buzz_en = true; // Set the buzzer enabled flag
+        gpio_put(Buzz, 1); // Turn on the buzzer
+        printf("Buzzer enabled\n"); // Print status message
+    } else { // If the buzzer should be disabled
+        buzz_en = false; // Set the buzzer disabled flag
+        gpio_put(Buzz, 0); // Turn off the buzzer
+        printf("Buzzer disabled\n"); // Print status message
+    }
+}
+gpio_init(Buzz);
+    gpio_set_dir(Buzz, GPIO_OUT);
