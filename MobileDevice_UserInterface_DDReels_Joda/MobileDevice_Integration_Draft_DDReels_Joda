@@ -63,7 +63,8 @@
  #include "pico/stdlib.h"
  #include "hardware/gpio.h"
  #include "hardware/pwm.h"
- 
+ #include "hardware/adc.h"
+
  // Function to update an icon on the LCD.
  typedef enum {
      ICON_CLEAR,  // Clear the icon (off)
@@ -90,6 +91,29 @@
  // Other Project Constants & Variables
  // =========================
  
+ // Define battery life indicator pin
+ #define BATTERY_ADC_PIN 26  // GPIO26 (ADC0)
+ // Voltage divider ratio (for 100kΩ & 47kΩ)
+ #define VOLTAGE_DIVIDER_RATIO 3.13  // Approximate ratio
+
+// Battery Voltage to Percentage Mapping (LiPo Approximation)
+int battery_percentage(float voltage) {
+    if (voltage >= 4.2) return 100;  // Fully charged
+    if (voltage >= 3.85) return 75 + ((voltage - 3.85) / 0.35) * 25;
+    if (voltage >= 3.7) return 50 + ((voltage - 3.7) / 0.15) * 25;
+    if (voltage >= 3.5) return 25 + ((voltage - 3.5) / 0.2) * 25;
+    if (voltage >= 3.2) return ((voltage - 3.2) / 0.3) * 25;
+    return 0;  // Battery low
+}
+
+// Read battery voltage through ADC
+float get_battery_voltage() {
+    adc_select_input(0); // Read from ADC0
+    uint16_t raw_value = adc_read();  // 12-bit (0–4095)
+    float v_measured = (raw_value / 4095.0) * 3.3; // Convert to voltage
+    return v_measured * VOLTAGE_DIVIDER_RATIO; // Scale up
+}
+
  // Define the full reel length (in feet) used to compute remaining length.
  #define FULL_REEL_LENGTH 200
  
@@ -108,7 +132,7 @@
  #define ENCODER_BTN 12  // Encoder push-button (active low).
  
  // Additional Button and LED Pins.
- #define BUTTON_26 26  // Fish biting simulator.
+ #define BUTTON_26 2  // Fish biting simulator.
  #define BUTTON_14 14  // Mute button.
  #define BUTTON_15 15  // Reel-Up button.
  #define LED_28    28  // Alarm LED.
@@ -328,16 +352,31 @@ void update_icon(uint8_t icon_index, IconMode mode) {
     lcd_send_data(data);
     lcd_send_command(0x30);
 }
- void update_battery_icon(void) {
-     // For now, assume battery is always at 100%.
-     // According to your specification:
-     //   - The SEGRAM address should be $0F (command: 0x40 | 0x0F).
-     //   - The data for a solid (full) battery icon should be $1F.
-     lcd_send_command(0x36);         // Switch to extended mode (RE=1).
-     lcd_send_command(0x40 | 0x0F);    // Set SEGRAM address to $0F.
-     lcd_send_data(0x1F);            // Write solid battery icon data.
-     lcd_send_command(0x30);         // Return to basic mode (RE=0).
- }
+ void update_battery_icon() {
+     float battery_voltage = get_battery_voltage();
+     int battery_level = battery_percentage(battery_voltage);
+
+     uint8_t icon_data;
+
+     if (battery_level >= 80) {  // Full Battery
+         icon_data = 0x1F;  // Solid icon
+     } else if (battery_level >= 60) {
+         icon_data = 0x1E;  // 4-bar icon
+     } else if (battery_level >= 40) {
+         icon_data = 0x1C;  // 3-bar icon
+     } else if (battery_level >= 20) {
+         icon_data = 0x18;  // 2-bar icon
+     } else {
+         icon_data = 0x50;  // 1-bar icon (low battery warning)
+     }
+ 
+     lcd_send_command(0x36);  // Switch to extended mode
+     lcd_send_command(0x40 | 0x0F);  // Set SEGRAM address for battery icon
+     lcd_send_data(icon_data);  // Write battery icon data
+     lcd_send_command(0x30);  // Return to normal mode
+ 
+     printf("[BATTERY] Voltage: %.2fV | Level: %d%% | Icon: 0x%X\n", battery_voltage, battery_level, icon_data);
+}
 void create_bluetooth_char(void) {
     // Set CGRAM address to 0 (for custom character 0).
     lcd_send_command(0x40);
@@ -822,6 +861,9 @@ void init_pwm_display_settings(void) {
      gpio_setup();
      init_pwm_display_settings();
      lcd_init();
+     adc_init();  // Initialize ADC for battery monitoring
+     adc_gpio_init(BATTERY_ADC_PIN);  // Enable ADC on GPIO26
+    
      display_main_screen();
      update_battery_icon();
      create_bluetooth_char();
@@ -842,6 +884,14 @@ void init_pwm_display_settings(void) {
                  }
              }
          }
+
+         // Update battery icon every 5 seconds
+        static uint32_t last_battery_update = 0;
+        if (to_ms_since_boot(get_absolute_time()) - last_battery_update > 5000) {
+            update_battery_icon();
+            last_battery_update = to_ms_since_boot(get_absolute_time());
+        }
+
          // If in a subpage and an update is flagged, update the subpage display.
          if (in_submenu && update_subpage_flag) {
              update_subpage(menu_index);
