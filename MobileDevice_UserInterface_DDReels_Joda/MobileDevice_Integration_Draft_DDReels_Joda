@@ -96,6 +96,10 @@
  // Voltage divider ratio (for 100kΩ & 47kΩ)
  #define VOLTAGE_DIVIDER_RATIO 3.13  // Approximate ratio
 
+ // GPIO Pins for charger status
+ #define CHARGER_STAT1 0  // Status 1 (STAT1)
+ #define CHARGER_STAT2 1  // Status 2 (STAT2)
+
 // Battery Voltage to Percentage Mapping (LiPo Approximation)
 int battery_percentage(float voltage) {
     if (voltage >= 4.2) return 100;  // Fully charged
@@ -377,6 +381,48 @@ void update_icon(uint8_t icon_index, IconMode mode) {
  
      printf("[BATTERY] Voltage: %.2fV | Level: %d%% | Icon: 0x%X\n", battery_voltage, battery_level, icon_data);
 }
+
+// Charging animation function
+void charging_animation() {
+    static uint8_t charge_stage = 0;  // Track charging cycle stage
+    charge_stage = (charge_stage + 1) % 5;  // Loop through animation
+
+    uint8_t icon_data;
+    switch (charge_stage) {
+        case 0: icon_data = 0x10; break;  // 1-bar (low battery)
+        case 1: icon_data = 0x18; break;  // 2-bar
+        case 2: icon_data = 0x1C; break;  // 3-bar
+        case 3: icon_data = 0x1E; break;  // 4-bar
+        case 4: icon_data = 0x1F; break;  // Full battery
+    }
+
+    // Update the LCD with the animated battery icon
+    lcd_send_command(0x36);  // Switch to extended mode
+    lcd_send_command(0x40 | 0x0F);  // Battery icon slot
+    lcd_send_data(icon_data);
+    lcd_send_command(0x30);  // Return to normal mode
+
+    printf("[CHARGING] Battery Animation Stage: %d | Icon: 0x%X\n", charge_stage, icon_data);
+}
+
+// Check charging status
+void check_charging_status() {
+    bool stat1 = gpio_get(CHARGER_STAT1);  // Read STAT1
+    bool stat2 = gpio_get(CHARGER_STAT2);  // Read STAT2
+
+    if (!stat1 && stat2) {  // Charging: STAT1 = LOW, STAT2 = HIGH
+        charging_animation();
+    } else if (stat1 && !stat2) {  // Fully charged: STAT1 = HIGH, STAT2 = LOW
+        lcd_send_command(0x36);
+        lcd_send_command(0x40 | 0x0F);
+        lcd_send_data(0x1F);  // Solid full battery icon
+        lcd_send_command(0x30);
+        printf("[CHARGING] Fully Charged - Solid Battery Icon\n");
+    } else {  // No charger: Normal battery update
+        update_battery_icon();
+    }
+}
+
 void create_bluetooth_char(void) {
     // Set CGRAM address to 0 (for custom character 0).
     lcd_send_command(0x40);
@@ -834,6 +880,15 @@ void create_bluetooth_char(void) {
      gpio_init(LED_27);
      gpio_set_dir(LED_27, GPIO_OUT);
      gpio_put(LED_27, 0);
+
+     // Initialize GPIO0 and GPIO1 as input for charger detection
+     gpio_init(CHARGER_STAT1);
+     gpio_set_dir(CHARGER_STAT1, GPIO_IN);
+     gpio_pull_up(CHARGER_STAT1);  // Ensure stable input
+
+     gpio_init(CHARGER_STAT2);
+     gpio_set_dir(CHARGER_STAT2, GPIO_IN);
+     gpio_pull_up(CHARGER_STAT2);
  }
   // Initializes the PWM outputs for both contrast and brightness to the default 50% setting.
 void init_pwm_display_settings(void) {
@@ -885,12 +940,13 @@ void init_pwm_display_settings(void) {
              }
          }
 
-         // Update battery icon every 5 seconds
-        static uint32_t last_battery_update = 0;
-        if (to_ms_since_boot(get_absolute_time()) - last_battery_update > 5000) {
-            update_battery_icon();
-            last_battery_update = to_ms_since_boot(get_absolute_time());
-        }
+         // Check charging status every 0.5 seconds
+         static uint32_t last_battery_update = 0;
+             if (to_ms_since_boot(get_absolute_time()) - last_battery_update > 500) {
+             check_charging_status();
+             last_battery_update = to_ms_since_boot(get_absolute_time());
+         }
+
 
          // If in a subpage and an update is flagged, update the subpage display.
          if (in_submenu && update_subpage_flag) {
