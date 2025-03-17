@@ -12,9 +12,9 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(sdkVersion 2.1.0)
-set(toolchainVersion 13_3_Rel1)
-set(picotoolVersion 2.1.0)
+set(sdkVersion 2.1.1)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.1.1)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
@@ -26,32 +26,39 @@ set(PICO_BOARD pico_w CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(i2c_scanner C CXX ASM)
+project(MobileDevice_DDReels_Joda C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
-add_executable(i2c_scanner i2c_scanner.c)
+add_executable(MobileDevice_DDReels_Joda MobileDevice_DDReels_Joda.c)
 
-pico_set_program_name(i2c_scanner "i2c_scanner")
-pico_set_program_version(i2c_scanner "0.1")
+pico_set_program_name(MobileDevice_DDReels_Joda "MobileDevice_DDReels_Joda")
+pico_set_program_version(MobileDevice_DDReels_Joda "0.1")
 
-# Enable USB Serial output for debugging
-pico_enable_stdio_uart(i2c_scanner 0)  # Disable UART
-pico_enable_stdio_usb(i2c_scanner 1)   # Enable USB output
+# Modify the below lines to enable/disable output over UART/USB
+pico_enable_stdio_uart(MobileDevice_DDReels_Joda 0)
+pico_enable_stdio_usb(MobileDevice_DDReels_Joda 1)
 
-# Link necessary libraries (ORDER MATTERS)
-target_link_libraries(i2c_scanner
-        hardware_i2c   # I2C library
-        hardware_pwm   # PWM library
-        pico_stdlib    # Standard Pico libraries
+# Link necessary libraries.
+# - pico_stdlib provides standard I/O and hardware support including flash routines.
+# - hardware_pwm is needed for controlling LCD contrast and brightness via PWM.
+target_link_libraries(MobileDevice_DDReels_Joda
+    pico_stdlib
+    hardware_pwm
+    hardware_adc
 )
 
-# Add standard include files to the build
-target_include_directories(i2c_scanner PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+# Add standard include directories.
+target_include_directories(MobileDevice_DDReels_Joda PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}
+)
+
+# If you use any additional libraries, add them here:
+target_link_libraries(MobileDevice_DDReels_Joda 
+    # Add other libraries if required, e.g., hardware_i2c, etc.
 )
 
 # Generate additional output formats (UF2, bin, etc.)
-pico_add_extra_outputs(i2c_scanner)
+pico_add_extra_outputs(MobileDevice_DDReels_Joda)
