@@ -15,7 +15,6 @@
 #define ENCODER_BTN 2 // encoder button
 #define RBTN 6 // right button
 #define LBTN 7 // left button
-#define Buzz 8 // buzzer
 #define PULSES_PER_UPDATE 2  // Update after every 4 pulses
 #define DEBOUNCE_DELAY 50    // Short pause to allow proper pulse registration (in milliseconds)
 static int last_values[8] = {-1, -1, -1, -1,-1,-1,-1,-1}; // Store previous values for menus
@@ -41,7 +40,6 @@ volatile int SpoolDiameter = 0;   // Store value for setting
 volatile int selected_menu = 0; // which menu_index is selected
 volatile bool right_pressed = false; // store if right button is pressed
 volatile bool left_pressed = false; // store if left button is pressed
-volatile bool buzz_en = false; // store if buzzer is enabled
 volatile int linecon = 0; // value used for conversion
 volatile int dragcon = 0; // value used for conversion
 volatile bool encoder_btpress = false; // store if encoder is pressed
@@ -54,6 +52,24 @@ volatile int last_MinSpeed = -1;
 volatile int last_SpoolDiameter = -1;
 volatile bool update_screen = false;
 volatile int LineLength = 0;
+volatile int Position1 = 0;
+volatile bool Pos0 = false;
+volatile int Position101 = 0;
+volatile int Position102 = 0;
+volatile int Position103 = 0;
+volatile int Position104 = 0;
+volatile int Position105 = 0;
+volatile int Position106 = 0;
+volatile int Position107 = 0;
+volatile int Position108 = 0;
+volatile int Position109 = 0;
+volatile int Position110 = 0;
+volatile int Position111 = 0;
+volatile int Position112 = 0;
+volatile int Position113 = 0;
+volatile int Position114 = 0;
+volatile int Position115 = 0;
+volatile bool DragNext = false;
 //leave alone
 static int encoder_value = 0;
 static uint32_t last_state = 0;
@@ -101,6 +117,139 @@ void cfa634_clear_screen() {
     sleep_ms(3);  // Give LCD time to process
 }
 // End of Screen Set up
+void RecalibrateDrag(int Position){
+    cfa634_print("                    ",0,0);
+    cfa634_print("     Position 0     ",0,1);
+    cfa634_print("     LEFT < YES     ",0,2);
+    cfa634_print("                    ",0,3);
+    if (Pos0){
+        switch(Position-1){
+            case 0:
+                char display_value[21];
+                sprintf(display_value, "         %02d         ", Position101);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 1     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 1:
+                char display_value1[21];
+                sprintf(display_value1, "         %02d         ", Position102);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 2     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value1, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 2:
+                char display_value2[21];
+                sprintf(display_value2, "         %02d         ", Position103);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 3     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value2, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 3:
+                char display_value3[21];
+                sprintf(display_value3, "         %02d         ", Position104);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 4     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value3, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 4:
+                char display_value4[21];
+                sprintf(display_value4, "         %02d         ", Position105);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 5     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value4, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 5:
+                char display_value5[21];
+                sprintf(display_value5, "         %02d         ", Position106);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 6     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value5, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 6:
+                char display_value6[21];
+                sprintf(display_value6, "         %02d         ", Position107);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 7     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value6, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 7:
+                char display_value7[21];
+                sprintf(display_value7, "         %02d         ", Position108);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 8    ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value7, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 8:
+                char display_value8[21];
+                sprintf(display_value8, "         %02d         ", Position109);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 9     ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value8, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 9:
+                char display_value9[21];
+                sprintf(display_value9, "         %02d         ", Position110);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 10    ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value9, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 10:
+                char display_value10[21];
+                sprintf(display_value10, "         %02d         ", Position111);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 11    ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value10, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 11:
+                char display_value11[21];
+                sprintf(display_value11, "         %02d         ", Position112);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 12    ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value11, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 12:
+                char display_value12[21];
+                sprintf(display_value12, "         %02d         ", Position113);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 13    ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value12, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 13:
+                char display_value13[21];
+                sprintf(display_value13, "         %02d         ", Position114);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 14    ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value13, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            case 14:
+                char display_value14[21];
+                sprintf(display_value14, "         %02d         ", Position115);  // %02d ensures two-digit format
+                cfa634_print("     POSITION 15    ", 0, 0);
+                cfa634_print("  LENGTH VALUE 0-99 ", 0, 1);
+                cfa634_print(display_value14, 0, 2);
+                cfa634_print("      R > NEXT      ", 0, 3);
+                break;
+            default:
+                break;
+
+        }
+    }
+}
 void selectedmenudisplay(int pos) {
     switch (pos) {
         case 0:
@@ -140,28 +289,28 @@ void selectedmenudisplay(int pos) {
             cfa634_print("   RIGHT > IMPERIAL ", 0, 2);
             cfa634_print(" PRESS DIAL > RETURN", 0, 3);
             break;
-        case 4: {
-            char display_value1[21];
-            sprintf(display_value1, "        %%%d%d         ", MaxSpeed / 10, MaxSpeed % 10);
-            
-            // Update display immediately
-            cfa634_print("   ENTER MAX SPEED  ", 0, 0);
-            cfa634_print("      VALUE 0-99    ", 0, 1);
-            cfa634_print(display_value1, 0, 2);
-            cfa634_print(" L > CANCEL R > SAVE", 0, 3);
-            break;
-        }
-        case 5: {
-            char display_value2[21];
-            sprintf(display_value2, "        %%%d%d         ", MinSpeed / 10, MinSpeed % 10);
-            
-            // Update display immediately
-            cfa634_print("   ENTER MIN SPEED  ", 0, 0);
-            cfa634_print("      VALUE 0-99    ", 0, 1);
-            cfa634_print(display_value2, 0, 2);
-            cfa634_print(" L > CANCEL R > SAVE", 0, 3);
-            break;
-        }
+            case 4: {
+                char display_value1[21];
+                sprintf(display_value1, "        %%%3d         ", MaxSpeed);  // Right-aligned, supports 0-999
+                
+                // Update display immediately
+                cfa634_print("   ENTER MAX SPEED  ", 0, 0);
+                cfa634_print("      VALUE 45-100   ", 0, 1);
+                cfa634_print(display_value1, 0, 2);
+                cfa634_print(" L > CANCEL R > SAVE", 0, 3);
+                break;
+            }
+            case 5: {
+                char display_value2[21];
+                sprintf(display_value2, "        %%%3d         ", MinSpeed);  // Right-aligned, supports 0-999
+                
+                // Update display immediately
+                cfa634_print("   ENTER MIN SPEED  ", 0, 0);
+                cfa634_print("      VALUE 0-45   ", 0, 1);
+                cfa634_print(display_value2, 0, 2);
+                cfa634_print(" L > CANCEL R > SAVE", 0, 3);
+                break;
+            }            
         case 6: {
             char display_value3[21];
             sprintf(display_value3, "        .%d%d         ", (int)SpoolDiameter / 10, (int)SpoolDiameter % 10);  // Casting to int for display
@@ -174,10 +323,7 @@ void selectedmenudisplay(int pos) {
             break;
         }
         case 7:
-            cfa634_print(" RECALIBRATING DRAG ", 0, 0);
-            cfa634_print("                    ", 0, 1);
-            cfa634_print("  PUSH DIAL > RETURN", 0, 2);
-            cfa634_print("                    ", 0, 3);
+            RecalibrateDrag(Position1);
             break;
         default: 
             break;
@@ -325,17 +471,6 @@ void cfa634_main(int line, int drag) {
     }
 }
 // Function to set the state of the buzzer
-void set_buzzer_state(bool state) {
-    if (state) { // If the buzzer should be enabled
-        buzz_en = true; // Set the buzzer enabled flag
-        gpio_put(Buzz, 1); // Turn on the buzzer
-        printf("Buzzer enabled\n"); // Print status message
-    } else { // If the buzzer should be disabled
-        buzz_en = false; // Set the buzzer disabled flag
-        gpio_put(Buzz, 0); // Turn off the buzzer
-        printf("Buzzer disabled\n"); // Print status message
-    }
-}
 // Function to read the state of the left and right buttons
 void read_btn() {
     static bool last_left_state = false;  
@@ -350,30 +485,39 @@ void read_btn() {
     if (left_state && !last_left_state) {  
         left_pressed = true;  
         
-        if (in_submenu && menu_index != 0 && menu_index != 3) {  
+        if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Restore previous value on cancel
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
             if (menu_index == 4) MaxSpeed = last_MaxSpeed;
             if (menu_index == 5) MinSpeed = last_MinSpeed;
             if (menu_index == 6) SpoolDiameter = last_SpoolDiameter;
-            if (menu_index == 7) LineLength = last_linelength;
             
             in_submenu = false;  
             settingsdisplay(menu_index);  // Exit submenu without saving
         } else if (menu_index == 3) {  
             isImperial = false;  
+        } else if (menu_index == 7){
+            Pos0 = true;
+            DragNext = false;
         }
     }
 
     if (right_state && !last_right_state) {  
         right_pressed = true;  
         
-        if (in_submenu && menu_index != 0 && menu_index != 3) {  
+        if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Confirm changes and exit submenu
             in_submenu = false;  
             settingsdisplay(menu_index);  
         } else if (menu_index == 3) {  
             isImperial = true;  
+        } else if (menu_index == 7){
+            if ((Position1) < 15){
+                DragNext = true;
+            } else if (Position1 == 15){
+                in_submenu = false;
+            }
+            Pos0 = false;
         }
     }
 
@@ -401,39 +545,75 @@ void encoder_isr(uint gpio, uint32_t events) {
     if ((A != last_A) || (B != last_B)) {  
         if (A == last_B) {  // Clockwise direction (A follows B)
             pulse_count++;
-            printf("CW Pulse | Counter: %d\n", pulse_count);
+            //printf("CW Pulse | Counter: %d\n", pulse_count);
         } else {  // Counterclockwise direction (B follows A)
             pulse_count--;
-            printf("CCW Pulse | Counter: %d\n", pulse_count);
+            //printf("CCW Pulse | Counter: %d\n", pulse_count);
         }
 
-        // Update menu every 2 pulses
-        if (pulse_count >= 2) {  
+        // Update menu and position variables every 3 pulses
+        if (pulse_count >= 3) {  
             if (in_submenu) {
                 if (menu_index == 2 && AutoStopLen < 99) AutoStopLen++;
-                else if (menu_index == 4 && MaxSpeed < 99) MaxSpeed++;
-                else if (menu_index == 5 && MinSpeed < 99) MinSpeed++;
+                else if (menu_index == 4 && MaxSpeed < 100) MaxSpeed += 10;
+                else if (menu_index == 5 && MinSpeed < 45) MinSpeed += 10;
                 else if (menu_index == 6 && SpoolDiameter < 99) SpoolDiameter++;
                 menuActive = true;
             } else {
                 menu_index = (menu_index < 7) ? menu_index + 1 : 7;
                 update_screen = true;
             }
-            printf("Menu Index Incremented: %d\n", menu_index);
+
+            // Update only the variable corresponding to Position1
+            if (Position1 == 1 && Position101 < 99) Position101++;
+            if (Position1 == 2 && Position102 < 99) Position102++;
+            if (Position1 == 3 && Position103 < 99) Position103++;
+            if (Position1 == 4 && Position104 < 99) Position104++;
+            if (Position1 == 5 && Position105 < 99) Position105++;
+            if (Position1 == 6 && Position106 < 99) Position106++;
+            if (Position1 == 7 && Position107 < 99) Position107++;
+            if (Position1 == 8 && Position108 < 99) Position108++;
+            if (Position1 == 9 && Position109 < 99) Position109++;
+            if (Position1 == 10 && Position110 < 99) Position110++;
+            if (Position1 == 11 && Position111 < 99) Position111++;
+            if (Position1 == 12 && Position112 < 99) Position112++;
+            if (Position1 == 13 && Position113 < 99) Position113++;
+            if (Position1 == 14 && Position114 < 99) Position114++;
+            if (Position1 == 15 && Position115 < 99) Position115++;
+
+            printf("Menu Index Incremented: %d | Position1: %d\n", menu_index, Position1);
             pulse_count = 0;  // Reset counter after update
         } 
-        else if (pulse_count <= -2) {  
+        else if (pulse_count <= -3) {  
             if (in_submenu) {
                 if (menu_index == 2 && AutoStopLen > 0) AutoStopLen--;
-                else if (menu_index == 4 && MaxSpeed > 0) MaxSpeed--;
-                else if (menu_index == 5 && MinSpeed > 0) MinSpeed--;
+                else if (menu_index == 4 && MaxSpeed > 45) MaxSpeed -= 10;
+                else if (menu_index == 5 && MinSpeed > 0) MinSpeed -= 10;
                 else if (menu_index == 6 && SpoolDiameter > 0) SpoolDiameter--;
                 menuActive = true;
             } else {
                 menu_index = (menu_index > 0) ? menu_index - 1 : 0;
                 update_screen = true;
             }
-            printf("Menu Index Decremented: %d\n", menu_index);
+
+            // Decrease only the variable corresponding to Position1
+            if (Position1 == 1 && Position101 > 0) Position101--;
+            if (Position1 == 2 && Position102 > 0) Position102--;
+            if (Position1 == 3 && Position103 > 0) Position103--;
+            if (Position1 == 4 && Position104 > 0) Position104--;
+            if (Position1 == 5 && Position105 > 0) Position105--;
+            if (Position1 == 6 && Position106 > 0) Position106--;
+            if (Position1 == 7 && Position107 > 0) Position107--;
+            if (Position1 == 8 && Position108 > 0) Position108--;
+            if (Position1 == 9 && Position109 > 0) Position109--;
+            if (Position1 == 10 && Position110 > 0) Position110--;
+            if (Position1 == 11 && Position111 > 0) Position111--;
+            if (Position1 == 12 && Position112 > 0) Position112--;
+            if (Position1 == 13 && Position113 > 0) Position113--;
+            if (Position1 == 14 && Position114 > 0) Position114--;
+            if (Position1 == 15 && Position115 > 0) Position115--;
+
+            printf("Menu Index Decremented: %d | Position1: %d\n", menu_index, Position1);
             pulse_count = 0;  // Reset counter after update
         }
     }
@@ -441,6 +621,7 @@ void encoder_isr(uint gpio, uint32_t events) {
     last_A = A;
     last_B = B;
 }
+
 
 // Function to check the state of the encoder button and handle button presses
 void check_encoder() {
@@ -474,10 +655,11 @@ void check_encoder() {
                     if (menu_index == 4) last_MaxSpeed = MaxSpeed;
                     if (menu_index == 5) last_MinSpeed = MinSpeed;
                     if (menu_index == 6) last_SpoolDiameter = SpoolDiameter;
-                    if (menu_index == 7) last_linelength = LineLength;
                     
                     selectedmenudisplay(selected_menu);  
-                } else if(in_submenu && menu_index==3){
+                } 
+                // **Only close menu 3 with a short press**
+                else if (in_submenu && menu_index == 3) {
                     in_submenu = false;
                     settingsdisplay(menu_index);
                 }
@@ -487,7 +669,6 @@ void check_encoder() {
         }
     }
 }
-
 // Function for Input and Output Set up
 void gpio_setup() {
     // Encoder Reading
@@ -509,9 +690,6 @@ void gpio_setup() {
     gpio_init(RBTN);
     gpio_set_dir(RBTN, GPIO_IN);
     gpio_pull_down(RBTN); //Pull-down for Right Button
-    // Buzzer Init
-    gpio_init(Buzz);
-    gpio_set_dir(Buzz, GPIO_OUT);
 }
 void screen_update(int linelength, int dragset) {
     read_btn(); // check button state
@@ -563,8 +741,6 @@ void screen_setup(){
     gpio_setup();
     sleep_ms(500); // Wait for LCD to power up
     cfa634_clear_screen();
-    //cfa634_send_command(0x13);
-    //cfa634_send_command(0x18);
 }
 int main() {
     screen_setup();
