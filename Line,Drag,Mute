@@ -202,7 +202,7 @@
  }
 
 // Fish Alarm with mute button
-Void check_and_set_gpio(int Length, int previousLength, int Drag) {
+Void check_and_set_gpio(int Length, int previousLength, int drag) {
   gpio_int(8);
   gpio_set_dir(8, GPIO_OUT);
   gpio_int();
@@ -422,6 +422,6 @@ Void check_and_set_gpio(int Length, int previousLength, int Drag) {
           //Clears queue and updates length value for core1    
       } 
 
-      check_and_set_gpio(Length, previousLength, Drag);
+      check_and_set_gpio(Length, previousLength, drag);
       previousLength = Length;
  }
