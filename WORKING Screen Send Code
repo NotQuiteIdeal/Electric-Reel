@@ -1,0 +1,103 @@
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+#include "hardware/gpio.h"
+
+#define I2C_PORT i2c0
+#define SDA_PIN 4 // I2C SDA Pin
+#define SCL_PIN 5 // I2C SCL Pin
+#define CFA634_I2C_ADDR 0x42  // I2C Address (7-bit format)
+
+// Set the screen width and line limit for the CFA634 display
+#define MAX_LINE_LENGTH 20  // Max characters per line
+
+void i2c_setup() {
+    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+}
+
+// Function to send a command to the LCD
+void cfa634_send_command(uint8_t cmd) {
+    uint8_t buffer[1] = {cmd};  // Store the command in a buffer
+    int ret = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, sizeof(buffer), false);
+    
+    if (ret < 0) {
+        printf("Error sending command: 0x%02X\n", cmd);
+    }
+    
+    sleep_ms(50);
+}
+
+
+// Function to set the cursor position (col: 0-15, row: 0-3)
+void setcursor(uint8_t col, uint8_t row) {
+    if (row > 3) row = 3;  // Ensure row is within bounds
+
+    uint8_t offset = col + (row * 0x00);  // Correct offset calculation
+    uint8_t cmd = 0x10 | offset;          // Use addition, not bitwise OR
+    printf("Sending cursor command: 0x%02X\n", cmd);  // Debug print
+
+    cfa634_send_command(cmd);
+    sleep_ms(10);  // Small delay for stability
+}
+
+
+
+
+
+// Function to send text to the LCD
+void cfa634_print_line(const char *text) {
+    char formatted_text[MAX_LINE_LENGTH + 1];
+    strncpy(formatted_text, text, MAX_LINE_LENGTH);
+    formatted_text[MAX_LINE_LENGTH] = '\0';  
+
+    for (size_t i = 0; i < MAX_LINE_LENGTH && formatted_text[i] != '\0'; i++) {
+        // Filter out unwanted control characters
+        if (formatted_text[i] >= 32 && formatted_text[i] <= 126) {  // Printable ASCII range
+            uint8_t data = (uint8_t)formatted_text[i];
+            i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &data, 1, false);
+            sleep_ms(10);  // Stability delay
+        }
+    }
+}
+
+
+
+
+// Clear the screen
+void cfa634_clear_screen() {
+    uint8_t clear_cmd = 0x01;  // Clear screen command
+    cfa634_send_command(clear_cmd);
+    sleep_ms(3);
+}
+
+int main() {
+    stdio_init_all();
+    i2c_setup();
+    sleep_ms(500);  // Wait for LCD to power up
+
+    cfa634_clear_screen();
+    cfa634_send_command(0x14);  // Disable scrolling
+
+    // Display lines sequentially
+    setcursor(0, 0);
+    cfa634_print_line("Line 1: Test       ");
+
+    setcursor(0, 1);
+    cfa634_print_line(" Line 2: Test       ");
+
+    setcursor(0, 2);
+    cfa634_print_line(" Line 3: Test       ");
+
+    setcursor(0, 3);
+    cfa634_print_line(" Line 4: Test      ");
+
+    while (true) {
+        sleep_ms(1000);
+    }
+}
+
