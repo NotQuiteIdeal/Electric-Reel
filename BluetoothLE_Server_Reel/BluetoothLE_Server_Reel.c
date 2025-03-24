@@ -50,6 +50,13 @@ bool ping_timer_callback(struct repeating_timer *t) {
     return true;
 }
 
+bool update_sender_callback(struct repeating_timer *t) {
+    printf("Sending BLE updates...\n");
+    send_ble_updates();
+
+    return true;
+}
+
 int main() {
     stdio_init_all();
 
@@ -76,13 +83,18 @@ int main() {
     printf("Bluetooth LE Server Running!\n");
 
     // Set up a repeating hardware timer to request BLE updates every 200ms
-    struct repeating_timer timer1;
-    add_repeating_timer_ms(-175, ping_timer_callback, NULL, &timer1);
+    //struct repeating_timer timer1;
+    //add_repeating_timer_ms(-175, ping_timer_callback, NULL, &timer1);
+
+    struct repeating_timer update_timer;
+    add_repeating_timer_ms(-500, update_sender_callback, NULL, &update_timer);
 
     
     // Main loop to update values
     while (true) {
-        tight_loop_contents();
+        sleep_ms(10);
+        line_length++;
+        drag_set++;
     }
 
     return 0;
