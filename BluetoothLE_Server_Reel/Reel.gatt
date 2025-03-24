@@ -6,22 +6,20 @@ CHARACTERISTIC, 2A00, READ, "Pico_Server_Reel"
 PRIMARY_SERVICE, 1801
 CHARACTERISTIC, 2A26, READ
 
-# Read-Only Reel Information - Line Length - Drag Set
-PRIMARY_SERVICE, e69b8497-9e59-42fb-be16-84a662d4fa66  
+# Test Service - Line Length - Drag Set - Reel Control - Motor Status - Motor Speed - Fish Alarm - Auto-Stop Length - Metric/Imperial - Ping Test
+PRIMARY_SERVICE, c0ff29e1-41a6-40d9-8735-9d22ae02d129
 CHARACTERISTIC, 1476a75a-2c6d-4649-8819-bb830daaa603, READ | NOTIFY | DYNAMIC 
 CHARACTERISTIC, 950e9e70-c453-4505-87e3-9dd6db626cc1, READ | NOTIFY | DYNAMIC 
 
-# Read/Write Reel Control - Motor Status - Motor Speed - Fish Alarm - Auto-Stop Length - Metric/Imperial
-PRIMARY_SERVICE, f46383fc-00bb-4d31-ba21-e32aa77b02dc
 CHARACTERISTIC, d966cdb4-f14c-4113-adb4-8c9925a29c52, READ | WRITE | NOTIFY | DYNAMIC 
 CHARACTERISTIC, cb8822a5-38c0-41fd-8c2b-d33fde778187, READ | WRITE | NOTIFY | DYNAMIC 
 CHARACTERISTIC, d45efe09-1eee-47a7-9026-0c4152740a66, READ | WRITE | NOTIFY | DYNAMIC
 CHARACTERISTIC, f8334e43-5262-4e64-a0ff-cbdef3bfa313, READ | WRITE | NOTIFY | DYNAMIC
 CHARACTERISTIC, d01d54bc-6a06-4dd6-bce6-180b4217437c, READ | WRITE | NOTIFY | DYNAMIC
 
-# Test Service - Ping Test - Ping Rate
-PRIMARY_SERVICE, c0ff29e1-41a6-40d9-8735-9d22ae02d129
 CHARACTERISTIC, a4b7e118-7b77-4ef9-a618-967a2842e630, READ | WRITE | NOTIFY | DYNAMIC
+
+
 
 # Common modifiers for characteristics: READ, WRITE, NOTIFY, INDICATE, DYNAMIC
 # NOTIFY sends a notification, INDICATE sends a notification requiring a response
