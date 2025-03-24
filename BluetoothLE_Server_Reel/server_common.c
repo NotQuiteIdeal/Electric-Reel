@@ -4,22 +4,22 @@
 #include "Reel.h"
 #include "pico/time.h"
 
-#define PING_CHAR_VALUE_HANDLE          0x0020
-#define PING_CHAR_CCCD_HANDLE           0x0021
 #define LINE_LENGTH_CHAR_VALUE_HANDLE   0x0009
 #define LINE_LENGTH_CHAR_CCCD_HANDLE    0x000a
 #define DRAG_SET_CHAR_VALUE_HANDLE      0x000c
 #define DRAG_SET_CHAR_CCCD_HANDLE       0x000d
-#define MOTOR_STATUS_CHAR_VALUE_HANDLE  0x0010
-#define MOTOR_STATUS_CHAR_CCCD_HANDLE   0x0011
-#define MOTOR_SPEED_VALUE_HANDLE        0x0013
-#define MOTOR_SPEED_CCCD_HANDLE         0x0014
-#define FISH_ALARM_VALUE_HANDLE         0x0016
-#define FISH_ALARM_CCCD_HANDLE          0x0017
-#define AUTO_STOP_LENGTH_VALUE_HANDLE   0x0019
-#define AUTO_STOP_LENGTH_CCCD_HANDLE    0x001a
-#define MEASUREMENT_SYtSEM_VALUE_HANDLE 0x001c
-#define MEASUREMENT_SYSTEM_CCCD_HANDLE  0x001d
+#define MOTOR_STATUS_CHAR_VALUE_HANDLE  0x000f
+#define MOTOR_STATUS_CHAR_CCCD_HANDLE   0x0010
+#define MOTOR_SPEED_VALUE_HANDLE        0x0012
+#define MOTOR_SPEED_CCCD_HANDLE         0x0013
+#define FISH_ALARM_VALUE_HANDLE         0x0015
+#define FISH_ALARM_CCCD_HANDLE          0x0016
+#define AUTO_STOP_LENGTH_VALUE_HANDLE   0x0018
+#define AUTO_STOP_LENGTH_CCCD_HANDLE    0x0019
+#define MEASUREMENT_SYSTEM_VALUE_HANDLE 0x001b
+#define MEASUREMENT_SYSTEM_CCCD_HANDLE  0x001c
+#define PING_CHAR_VALUE_HANDLE          0x001e
+#define PING_CHAR_CCCD_HANDLE           0x001f
 
 extern const uint8_t profile_data[];
 
@@ -28,7 +28,8 @@ extern const uint8_t profile_data[];
 static uint8_t adv_data[] = {
     0x02, BLUETOOTH_DATA_TYPE_FLAGS, APP_AD_FLAGS,
     0x0F, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'P', 'i', 'c', 'o', '_', 'R', 'e', 'e', 'l',
-    0x11, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS
+    0x11, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
+    0xc0, 0xff, 0x29, 0xe1, 0x41, 0xa6, 0x40, 0xd9, 0x87, 0x35, 0x9d, 0x22, 0xae, 0x02, 0xd1, 0x29
 };
 
 static const uint8_t adv_data_len = sizeof(adv_data);
@@ -42,6 +43,8 @@ uint16_t drag_set = 0;
 uint8_t motor_status = 0;
 uint8_t motor_speed = 0;
 uint8_t fish_alarm = 0;
+uint8_t auto_stop_length = 0;
+uint8_t measurement_system = 0;
 
 // Variables for testing ping
 absolute_time_t ping_received_time;
@@ -81,9 +84,11 @@ void send_ping_notification() {
 void send_ble_updates() {
     att_server_notify(con_handle, LINE_LENGTH_CHAR_VALUE_HANDLE, (uint8_t*)&line_length, sizeof(line_length));
     att_server_notify(con_handle, DRAG_SET_CHAR_VALUE_HANDLE, (uint8_t*)&drag_set, sizeof(drag_set));
-    att_server_notify(con_handle, MOTOR_STATUS_CHAR_VALUE_HANDLE, (uint8_t*)&motor_status, sizeof(motor_status));
-    att_server_notify(con_handle, ATT_CHARACTERISTIC_cb8822a5_38c0_41fd_8c2b_d33fde778187_01_VALUE_HANDLE, (uint8_t*)&motor_speed, sizeof(motor_speed));
-    att_server_notify(con_handle, ATT_CHARACTERISTIC_d45efe09_1eee_47a7_9026_0c4152740a66_01_VALUE_HANDLE, (uint8_t*)&fish_alarm, sizeof(fish_alarm));
+    //att_server_notify(con_handle, MOTOR_STATUS_CHAR_VALUE_HANDLE, (uint8_t*)&motor_status, sizeof(motor_status));
+    att_server_notify(con_handle, MOTOR_SPEED_VALUE_HANDLE, (uint8_t*)&motor_speed, sizeof(motor_speed));
+    att_server_notify(con_handle, FISH_ALARM_VALUE_HANDLE, (uint8_t*)&fish_alarm, sizeof(fish_alarm));
+    att_server_notify(con_handle, AUTO_STOP_LENGTH_VALUE_HANDLE, (uint8_t*)&auto_stop_length, sizeof(auto_stop_length));
+    att_server_notify(con_handle, MEASUREMENT_SYSTEM_VALUE_HANDLE, (uint8_t*)&measurement_system, sizeof(measurement_system));
 }
 
 // Packet handler for BLE events
@@ -123,9 +128,31 @@ void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint
             break;
 
         case ATT_EVENT_CAN_SEND_NOW:
-            if (ping_test_status == 1) {
+            /* if (ping_test_status == 1) { Ping test remnants
                 send_ping_notification();
+            } */
+
+            if (send_update_flag) {
+                printf("Sending BLE updates!\n");
+        
+                // Reset flag
+                send_update_flag = 0;
+        
+                // Update values
+                line_length = 100;
+                drag_set = 50;
+                motor_status = 1;
+                motor_speed = 2;
+                fish_alarm = 5;
+                auto_stop_length = 10;
+                measurement_system = 2;
+        
+                // Send notifications
+                send_ble_updates();
+        
+                printf("Notifications sent!\n");
             }
+            
             break;
         
         case HCI_EVENT_LE_META:
@@ -142,21 +169,7 @@ void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint
                 // Min: 10ms (8*1.25ms), Max: 20ms (16*1.25ms)
 
                 printf("Waiting for client write before beginning tests...\n");
-                
-                /* Temporarily removed for testing other ping route
-                // Record the start time
-                absolute_time_t start_time = get_absolute_time();
-                ping_sent_time = to_us_since_boot(start_time);
-                ping_test_status = 1;
-        
-                printf("Starting Ping Test at: %u us\n", ping_sent_time);
-                
-                if (ping_test_status == 1) {
-                    // Start sending pings
-                    send_ping_notification();
-                    ping_test_status = 2;
-                }
-                */
+            
             }
             break;
         
@@ -196,40 +209,68 @@ uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t att_hand
 // Handle BLE Write Requests
 int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size) {
     printf("Received write on handle: 0x%04X\n", attribute_handle);
-    if (attribute_handle == PING_CHAR_VALUE_HANDLE) {
-        if (ping_test_status == 1) {
-            absolute_time_t server_received_time = get_absolute_time();
-            uint32_t server_timestamp = to_us_since_boot(server_received_time);
-
-            uint32_t round_trip_time = (server_timestamp > ping_sent_time) ? (server_timestamp - ping_sent_time) : 0;
-
-            printf("Received Ping Response from Client!\n");
-            printf("Round-trip time: %u us (%.3f ms)\n", round_trip_time, round_trip_time / 1000.0);
-            ping_rate_count++;
-            printf("%d\n", ping_rate_count);
-        }
-        
-        if (buffer_size > 0) {
-            printf("Received write on handle: 0x%04X, Value: %02X\n", attribute_handle, buffer[0]);
-        } else {
-            printf("WARNING: Empty write received from client!\n");
-        }
+    
+    if (attribute_handle == LINE_LENGTH_CHAR_CCCD_HANDLE) {
+        printf("Client Subscribed to Line Length!\n");
+    }
+    if (attribute_handle == DRAG_SET_CHAR_CCCD_HANDLE) {
+        printf("Client Subscribed to Drag Set!\n");
+    }
+    if (attribute_handle == MOTOR_STATUS_CHAR_CCCD_HANDLE) {
+        printf("Client Subscribed to Motor Status!\n");
+    }
+    if (attribute_handle == MOTOR_SPEED_CCCD_HANDLE) {
+        printf("Client Subscribed to Motor Speed!\n");
+    }
+    if (attribute_handle == FISH_ALARM_CCCD_HANDLE) {
+        printf("Client Subscribed to Fish Alarm!\n");
+    }
+    if (attribute_handle == AUTO_STOP_LENGTH_CCCD_HANDLE) {
+        printf("Client Subscribed to Auto Stop Length!\n");
+    }
+    if (attribute_handle == MEASUREMENT_SYSTEM_CCCD_HANDLE) {
+        printf("Client Subscribed to Measurement System!\n");
     }
     if (attribute_handle == PING_CHAR_CCCD_HANDLE) {
-        if (buffer_size == 2) {
-            uint16_t cccd_value = little_endian_read_16(buffer, 0);
+        printf("Client Subscribed to Ping!\n");
+    
+        // Set update flag
+        send_update_flag = 1;
+    
+        // Request permission to send data in the next BLE event
+        att_server_request_can_send_now_event(con_handle);
+    }
 
-            // Check if any\thing is enabled (0x0001 for notifications, 0x0002 for indications)
-            if (cccd_value & GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION) {
-                printf("Client subscribed to notifications for Ping Characteristic.\n");
-                
-                
-                ping_test_status = 1;
-            } else {
-                printf("Client unsubscribed from notifications.");
-                ping_test_status = 0;
-            }
+    if (attribute_handle == MOTOR_SPEED_VALUE_HANDLE) {
+        if (buffer_size == 1) {
+            motor_speed = buffer[0];
+            printf("Received motor speed: %d\n", motor_speed);
         }
+        return 0;
+    }
+    
+    if (attribute_handle == FISH_ALARM_VALUE_HANDLE) {
+        if (buffer_size == 1) {
+            fish_alarm = buffer[0];
+            printf("Received fish alarm toggle: %d\n", fish_alarm);
+        }
+        return 0;
+    }
+    
+    if (attribute_handle == AUTO_STOP_LENGTH_VALUE_HANDLE) {
+        if (buffer_size == 1) {
+            auto_stop_length = buffer[0];
+            printf("Received auto stop length: %d\n", auto_stop_length);
+        }
+        return 0;
+    }
+    
+    if (attribute_handle == MEASUREMENT_SYSTEM_VALUE_HANDLE) {
+        if (buffer_size == 1) {
+            measurement_system = buffer[0];
+            printf("Received measurement system: %d\n", measurement_system);
+        }
+        return 0;
     }
     
     return 0;
