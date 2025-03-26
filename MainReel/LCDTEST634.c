@@ -6,6 +6,8 @@
 #include "hardware/gpio.h"
 #include "pico/multicore.h"
 #include "pico/time.h"
+#include "LCDTEST634.h"
+
 #define I2C_PORT i2c0
 #define SDA_PIN 4 // i2c data
 #define SCL_PIN 5 // i2c clock
@@ -18,6 +20,7 @@
 #define LBTN 7 // left button
 #define PULSES_PER_UPDATE 2  // Update after every 4 pulses
 #define DEBOUNCE_DELAY 50    // Short pause to allow proper pulse registration (in milliseconds)
+
 static int last_values[8] = {-1, -1, -1, -1,-1,-1,-1,-1}; // Store previous values for menus
 volatile int last_linelength = -1;// used to detremine if to update display
 volatile int last_dragset = -1;// used to detremine if to update display
@@ -33,7 +36,7 @@ int last_menu_index = -1; // to ensure the screen displays
 volatile bool ignore_next_press = false; // ingore if less than that time and not in a settings menu
 volatile bool in_submenu = false; // stores if in submen
 volatile int selected_digit = 1; // which digit the cursors is on
-volatile bool isImperial = true; //false = metric, true = imperial
+volatile bool isImperial = false; //false = metric, true = imperial
 volatile int AutoStopLen = 0;     // Store value for setting
 volatile int MaxSpeed = 0;        // Store value for setting
 volatile int MinSpeed = 0;        // Store value for setting
@@ -78,6 +81,15 @@ static uint32_t last_read_time = 0;
 const uint32_t debounce_delay = 50;
 volatile int last_encoder_A = 0;
 volatile int last_encoder_B = 0;
+
+// Bluetooth Variables
+extern volatile uint16_t line_length;
+extern volatile uint16_t drag_set;
+extern volatile uint8_t motor_status;
+extern volatile uint8_t motor_speed;
+extern volatile uint8_t fish_alarm;
+extern volatile uint8_t auto_stop_length;
+extern volatile uint8_t measurement_system;
 
 // Function to send a command to the LCD
 void cfa634_send_command(uint8_t cmd) {
@@ -761,6 +773,9 @@ void encoder_isr(uint gpio, uint32_t events) {
         }
     }
 
+    auto_stop_length = AutoStopLen;
+
+
     last_A = A;
     last_B = B;
 }
@@ -883,6 +898,9 @@ void screen_setup(){
     cfa634_clear_screen();
     cfa634_send_command(0x14);
 }
+
+
+/*
 int main() {
     screen_setup();
     int linelength = 0;
@@ -891,3 +909,4 @@ int main() {
         screen_update(linelength, dragset);
     }
 }
+*/

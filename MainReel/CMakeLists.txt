@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(MainReel MainReel.c server_common.c)
+add_executable(MainReel MainReel.c server_common.c LCDTEST634.c)
 
 pico_set_program_name(MainReel "MainReel")
 pico_set_program_version(MainReel "0.1")

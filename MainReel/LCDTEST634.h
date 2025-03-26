@@ -3,6 +3,9 @@
 
 void encoder_isr(uint gpio, uint32_t events);
 void screen_setup();
-void screen_update(int linelength, int dragset)
+void screen_update(int linelength, int dragset);
+
+extern volatile int AutoStopLen;
+extern volatile bool isImperial;
 
 #endif

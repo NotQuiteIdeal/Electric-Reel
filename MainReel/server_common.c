@@ -58,6 +58,14 @@ int ping_rate_count = 0;
 // Update flag for external updates
 volatile int send_update_flag = 0;
 
+// UI Variables for updating
+extern volatile int AutoStopLen;
+extern volatile bool isImperial;
+extern volatile int last_AutoStopLen;
+extern volatile int last_menu_index;
+extern volatile bool menuActive;
+
+
 // Function to send a ping notification
 void send_ping_notification() {
 
@@ -235,7 +243,7 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
     if (attribute_handle == MOTOR_SPEED_VALUE_HANDLE) {
         if (buffer_size == 1) {
             motor_speed = buffer[0];
-            printf("Received motor speed: %d\n", motor_speed);
+            //printf("Received motor speed: %d\n", motor_speed);
         }
         return 0;
     }
@@ -243,7 +251,7 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
     if (attribute_handle == FISH_ALARM_VALUE_HANDLE) {
         if (buffer_size == 1) {
             fish_alarm = buffer[0];
-            printf("Received fish alarm toggle: %d\n", fish_alarm);
+            //printf("Received fish alarm toggle: %d\n", fish_alarm);
         }
         return 0;
     }
@@ -251,7 +259,8 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
     if (attribute_handle == AUTO_STOP_LENGTH_VALUE_HANDLE) {
         if (buffer_size == 1) {
             auto_stop_length = buffer[0];
-            printf("Received auto stop length: %d\n", auto_stop_length);
+            //printf("Received auto stop length: %d\n", auto_stop_length);
+            AutoStopLen = auto_stop_length;
         }
         return 0;
     }
@@ -259,7 +268,12 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
     if (attribute_handle == MEASUREMENT_SYSTEM_VALUE_HANDLE) {
         if (buffer_size == 1) {
             measurement_system = buffer[0];
-            printf("Received measurement system: %d\n", measurement_system);
+            //printf("Received measurement system: %d\n", measurement_system);
+            if (measurement_system == 0) {
+                isImperial = true;
+            } else {
+                isImperial = false;
+            }
         }
         return 0;
     }

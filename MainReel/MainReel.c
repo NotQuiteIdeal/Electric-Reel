@@ -15,6 +15,7 @@
 #include "server_common.h"
 #include "pico/cyw43_arch.h"
 #include "pico/btstack_cyw43.h"
+#include "LCDTEST634.h"
 
 // Multicore variables for handling encoder counts and calculations
 // Pin Definitions
@@ -133,7 +134,7 @@ void update_limits(uint16_t new_min, uint16_t new_max) {
 
 bool update_sender_callback(struct repeating_timer *t) {
     //printf("Sending BLE updates...\n");
-    printf("Line Length in Reel: %d , Line length in Server: %d\n", length, line_length);
+    //printf("Line Length in Reel: %d , Line length in Server: %d\n", length, line_length);
     send_ble_updates();
 
     return true;
@@ -178,6 +179,7 @@ void core1() {
     add_repeating_timer_ms(-200, update_sender_callback, NULL, &update_timer);
 
     while (true) {
+        
 
         // PWM Code
         uint16_t pot_value = read_potentiometer();
@@ -186,18 +188,16 @@ void core1() {
         // Apply limits
         set_pwm_duty(duty_cycle);
 
-
-
         // Print values
         //float voltage = pot_value * (3.3f / 4095.0f);
         //float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
         //printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
-        
-        screen_update(length, drag);
 
         // Example: Dynamically update limits (could be triggered by a button/UART)
         // Uncomment this line to change limits dynamically during execution
         // update_limits(20000, 45000);
+
+        screen_update(length, drag);
     }
 }
 
