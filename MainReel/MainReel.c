@@ -269,7 +269,7 @@ int main() {
                 newValdrag = 00;
             }
         }
-
+        Old_Length = line_length;
         // Update rotation count and calculate line length
         if (newVal != oldVal) { 
              if (oldVal == 11) {
@@ -320,6 +320,7 @@ int main() {
              }
          }
          oldVal = newVal;
+        New_Length = line_length;
 
         // Update drag count based on encoder
          if (newValdrag != oldValdrag) {
@@ -367,4 +368,43 @@ int main() {
         oldValdrag = newValdrag;
          //Clears queue and updates length value for core1    
      } 
+}
+
+int main() {
+    stdio_init_all();  // Initialize standard I/O for debugging (optional)
+    int drag = 1;
+    int New_Length = 0; //Change to new line count
+    int Old_Length = 0; //Change to Old line count
+    bool reg = false;
+    // Define GPIO pins
+    const int B1_PIN = 6;
+    const int B2_PIN = 7;
+    const int BUZZER_PIN = 8;  // Now used for a buzzer instead of an LED
+    
+    // Initialize Buttons as Inputs (Active High)
+    gpio_init(B1_PIN);
+    gpio_set_dir(B1_PIN, GPIO_IN);
+    gpio_init(B2_PIN);
+    gpio_set_dir(B2_PIN, GPIO_IN);
+    
+    // Initialize Buzzer as Output
+    gpio_init(BUZZER_PIN);
+    gpio_set_dir(BUZZER_PIN, GPIO_OUT);
+    while (true) {
+        // Read buttons (Active High: 1 when pressed, 0 when not pressed)
+        int B1 = gpio_get(B1_PIN);  
+        int B2 = gpio_get(B2_PIN);
+        // Toggle reg only when both buttons are pressed
+        if (B1 == 1 && B2 ==1) { //THIS IS FOR MULTIPLE INPUTS
+            reg = !reg;
+            sleep_ms(1000);  // Debounce delay
+        }
+        // Buzzer Logic
+        if (reg && drag != 0 && N > O) {
+            gpio_put(BUZZER_PIN, 1);  // Turn buzzer ON
+        } else {
+            gpio_put(BUZZER_PIN, 0);  // Ensure buzzer is OFF when condition is not met
+        }
+    }
+    return 0;
 }
