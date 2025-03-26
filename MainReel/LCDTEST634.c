@@ -646,6 +646,7 @@ void read_btn() {
             settingsdisplay(menu_index);  // Exit submenu without saving
         } else if (menu_index == 3) {  
             isImperial = false;  
+            measurement_system = 1;
         } else if (menu_index == 7){
             Pos0 = true;
             DragNext = false;
@@ -662,6 +663,7 @@ void read_btn() {
             settingsdisplay(menu_index);  
         } else if (menu_index == 3) {  
             isImperial = true;  
+            measurement_system = 0;
         } else if (menu_index == 7){
             if (Pos0 == true) {
                 if ((Position1) < 15){
