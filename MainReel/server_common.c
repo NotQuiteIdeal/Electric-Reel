@@ -90,6 +90,8 @@ void send_ping_notification() {
 }
 
 void send_ble_updates() {
+    if (!con_handle) return;  // Not connected
+
     att_server_notify(con_handle, LINE_LENGTH_CHAR_VALUE_HANDLE, (uint8_t*)&line_length, sizeof(line_length));
     att_server_notify(con_handle, DRAG_SET_CHAR_VALUE_HANDLE, (uint8_t*)&drag_set, sizeof(drag_set));
     //att_server_notify(con_handle, MOTOR_STATUS_CHAR_VALUE_HANDLE, (uint8_t*)&motor_status, sizeof(motor_status));

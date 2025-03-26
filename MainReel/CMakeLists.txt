@@ -37,6 +37,8 @@ pico_sdk_init()
 
 add_executable(MainReel MainReel.c server_common.c LCDTEST634.c)
 
+pico_btstack_make_gatt_header(MainReel PRIVATE "${CMAKE_CURRENT_LIST_DIR}/Reel.gatt")
+
 pico_set_program_name(MainReel "MainReel")
 pico_set_program_version(MainReel "0.1")
 
@@ -68,7 +70,7 @@ target_link_libraries(MainReel
         pico_multicore
         )
 
-pico_btstack_make_gatt_header(MainReel PRIVATE "${CMAKE_CURRENT_LIST_DIR}/Reel.gatt")
+
 
 pico_add_extra_outputs(MainReel)
 
