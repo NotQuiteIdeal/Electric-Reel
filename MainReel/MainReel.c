@@ -216,6 +216,24 @@ int main() {
     gpio_init(11); 
     gpio_set_dir(11, GPIO_IN);
 
+    int New_Length = 0; //Change to new line count
+    int Old_Length = 0; //Change to Old line count
+    bool reg = false;
+    // Define GPIO pins
+    const int B1_PIN = 6;
+    const int B2_PIN = 7;
+    const int BUZZER_PIN = 8;  // Now used for a buzzer instead of an LED
+    
+    // Initialize Buttons as Inputs (Active High)
+    gpio_init(B1_PIN);
+    gpio_set_dir(B1_PIN, GPIO_IN);
+    gpio_init(B2_PIN);
+    gpio_set_dir(B2_PIN, GPIO_IN);
+    
+    // Initialize Buzzer as Output
+    gpio_init(BUZZER_PIN);
+    gpio_set_dir(BUZZER_PIN, GPIO_OUT);
+
     double Dmax = 3.685;
     double Dmin = 2.00;
     int rotations = 0;
@@ -234,7 +252,7 @@ int main() {
             drag = 0;
         }*/
 
-        printf("%d\n", count_drag);
+        //printf("%d\n", count_drag);
         int chanA = gpio_get(10); // Read encoder channels for rotation count
         int chanB = gpio_get(11);
         int chanDragA = gpio_get(14); // Read encoder channels for drag count
@@ -367,30 +385,8 @@ int main() {
         //update_drag();
         oldValdrag = newValdrag;
          //Clears queue and updates length value for core1    
-     } 
-}
 
-int main() {
-    stdio_init_all();  // Initialize standard I/O for debugging (optional)
-    int drag = 1;
-    int New_Length = 0; //Change to new line count
-    int Old_Length = 0; //Change to Old line count
-    bool reg = false;
-    // Define GPIO pins
-    const int B1_PIN = 6;
-    const int B2_PIN = 7;
-    const int BUZZER_PIN = 8;  // Now used for a buzzer instead of an LED
-    
-    // Initialize Buttons as Inputs (Active High)
-    gpio_init(B1_PIN);
-    gpio_set_dir(B1_PIN, GPIO_IN);
-    gpio_init(B2_PIN);
-    gpio_set_dir(B2_PIN, GPIO_IN);
-    
-    // Initialize Buzzer as Output
-    gpio_init(BUZZER_PIN);
-    gpio_set_dir(BUZZER_PIN, GPIO_OUT);
-    while (true) {
+         // Check Buzzer
         // Read buttons (Active High: 1 when pressed, 0 when not pressed)
         int B1 = gpio_get(B1_PIN);  
         int B2 = gpio_get(B2_PIN);
@@ -400,11 +396,12 @@ int main() {
             sleep_ms(1000);  // Debounce delay
         }
         // Buzzer Logic
-        if (reg && drag != 0 && N > O) {
-            gpio_put(BUZZER_PIN, 1);  // Turn buzzer ON
-        } else {
-            gpio_put(BUZZER_PIN, 0);  // Ensure buzzer is OFF when condition is not met
+        if (reg && drag != 0 && New_Length > Old_Length) {
+            fish_alarm = 1;
+            printf("Fish alarm on!\n");
+        } else  {
+            fish_alarm = 0;
         }
-    }
-    return 0;
+        gpio_put(BUZZER_PIN, fish_alarm);
+     } 
 }

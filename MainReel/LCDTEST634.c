@@ -36,7 +36,7 @@ int last_menu_index = -1; // to ensure the screen displays
 volatile bool ignore_next_press = false; // ingore if less than that time and not in a settings menu
 volatile bool in_submenu = false; // stores if in submen
 volatile int selected_digit = 1; // which digit the cursors is on
-volatile bool isImperial = false; //false = metric, true = imperial
+volatile bool isImperial = true; //false = metric, true = imperial
 volatile int AutoStopLen = 0;     // Store value for setting
 volatile int MaxSpeed = 0;        // Store value for setting
 volatile int MinSpeed = 0;        // Store value for setting
