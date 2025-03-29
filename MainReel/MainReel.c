@@ -95,7 +95,11 @@ int update_drag(double count_drag) {
         drag = 55;
     } else if (count_drag >= 61 && count_drag <= 65) {
         drag = 60;
-    }
+    } else if (count_drag >= 66 && count_drag <= 70) {
+        drag = 65;
+    } else if (count_drag >= 71 && count_drag <= 75) {
+        drag = 70;
+    } 
     return drag; // Return the calculated drag
 }
 
