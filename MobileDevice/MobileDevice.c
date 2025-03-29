@@ -66,6 +66,8 @@
  #include "hardware/adc.h"
  #include "client.h"
  #include "pico/multicore.h"
+ #include "hardware/flash.h"
+ #include "hardware/sync.h"
 
  // Function to update an icon on the LCD.
  typedef enum {
@@ -73,6 +75,15 @@
      ICON_SOLID,  // Display the solid version of the icon
      ICON_BLINK   // Display the blinking version of the icon
  } IconMode;
+
+  // Struct for saving settings
+  typedef struct {
+    int brightness;
+    int contrast;
+    int reel_speed;
+    bool alarm_enabled;
+    uint32_t crc32;
+ } settings_t;
 
 
  // =========================
@@ -184,6 +195,56 @@ float get_battery_voltage() {
  extern volatile uint8_t fish_alarm;
  extern volatile uint8_t auto_stop_length;
  extern volatile uint8_t measurement_system;
+ extern uint8_t __flash_binary_end;
+ settings_t current_settings;
+
+
+ #define FLASH_TARGET_OFFSET (1536 * 1024)  // 1.5MB = 0x180000
+
+ // Function for verifying available space in flash memory for storing settings
+ void check_flash_size() {
+    uint32_t used_flash = (uintptr_t)&__flash_binary_end - XIP_BASE;
+    printf("Flash used by firmware: %lu bytes\n", used_flash);
+ }
+
+ uint32_t calculate_crc32(const void *data, size_t length) {
+    uint32_t crc = 0xFFFFFFFF;
+    const uint8_t *bytes = (const uint8_t *)data;
+    for (size_t i = 0; i < length; i++) {
+        crc ^= bytes[i];
+        for (int j = 0; j < 8; j++) {
+            crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+        }
+    }
+    return ~crc;
+ }
+
+ void save_settings_to_flash(const settings_t *settings) {
+    settings_t temp = *settings;
+    temp.crc32 = calculate_crc32(&temp, sizeof(settings_t) - sizeof(uint32_t));
+
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(FLASH_TARGET_OFFSET, 4096);
+    flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t *)&temp, sizeof(settings_t));
+    restore_interrupts(ints);
+
+    printf("[FLASH] Settings saved.\n");
+}
+
+bool load_settings_from_flash(settings_t *settings) {
+    const settings_t *flash_settings = (const settings_t *)(XIP_BASE + FLASH_TARGET_OFFSET);
+    uint32_t crc = calculate_crc32(flash_settings, sizeof(settings_t) - sizeof(uint32_t));
+
+    if (crc == flash_settings->crc32) {
+        memcpy(settings, flash_settings, sizeof(settings_t));
+        printf("[FLASH] Settings loaded.\n");
+        return true;
+    } else {
+        printf("[FLASH] Invalid or uninitialized settings.\n");
+        return false;
+    }
+}
+
  
  // =========================
  // LCD Helper Functions
@@ -546,6 +607,13 @@ void create_bluetooth_char(void) {
          if (duration < 3000) { // Short press.
              // Option 7 (index 6) is Save Settings.
              if (menu_index == 6) {
+                 current_settings.brightness = brightness_value;
+                 current_settings.contrast = contrast_value;
+                 current_settings.reel_speed = reel_speed;
+                 current_settings.alarm_enabled = alarm_enabled;
+                 save_settings_to_flash(&current_settings); // Save settings to flash memory.
+
+                
                  printf("[SAVE] Settings saved:\n");
                  printf("        Reel Speed: %d%%\n", reel_speed);
                  printf("        Auto Stop Length: %d FT\n", stop_length);
@@ -967,6 +1035,22 @@ void BT_Core(void) {
      printf("[SYSTEM] Starting UI Components\n");
      
      gpio_setup();
+
+     if (!load_settings_from_flash(&current_settings)) {
+         // Defaults
+         current_settings.brightness = 100;
+         current_settings.contrast = 50;
+         current_settings.reel_speed = 50;
+         current_settings.alarm_enabled = true;
+     }
+
+     // Sync to runtime variables
+     brightness_value = current_settings.brightness;
+     contrast_value = current_settings.contrast;
+     reel_speed = current_settings.reel_speed;
+     alarm_enabled = current_settings.alarm_enabled;
+
+
      init_pwm_display_settings();
      lcd_init();
      adc_init();  // Initialize ADC for battery monitoring

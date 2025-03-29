@@ -399,6 +399,7 @@ int main() {
         if (B1 == 1 && B2 ==1) { //THIS IS FOR MULTIPLE INPUTS
             reg_count++; // Debouncer without slowing code down
             if (reg_count >= 20000) {
+                reg_count = 0; // Reset counter after toggling
                 reg = !reg;
                 printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
             }
