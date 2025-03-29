@@ -6,8 +6,6 @@
 #include "hardware/gpio.h"
 #include "pico/multicore.h"
 #include "pico/time.h"
-#include "LCDTEST634.h"
-
 #define I2C_PORT i2c0
 #define SDA_PIN 4 // i2c data
 #define SCL_PIN 5 // i2c clock
@@ -19,9 +17,8 @@
 #define RBTN 6 // right button
 #define LBTN 7 // left button
 #define PULSES_PER_UPDATE 2  // Update after every 4 pulses
-#define DEBOUNCE_DELAY 50    // Short pause to allow proper pulse registration (in milliseconds)
-
-static int last_values[8] = {-1, -1, -1, -1,-1,-1,-1,-1}; // Store previous values for menus
+#define DEBOUNCE_TIME_MS 25     // Short pause to allow proper pulse registration (in milliseconds)
+ // Store previous values for menus
 volatile int last_linelength = -1;// used to detremine if to update display
 volatile int last_dragset = -1;// used to detremine if to update display
 static int previous_encoder_value = 0;// used for reading encoder
@@ -50,29 +47,17 @@ volatile bool encoder_btpress = false; // store if encoder is pressed
 volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
-volatile int last_AutoStopLen = -1;
-volatile int last_MaxSpeed = -1;
-volatile int last_MinSpeed = -1;
-volatile int last_SpoolDiameter = -1;
+volatile int last_AutoStopLen = 20;
+volatile int last_MaxSpeed = 70;
+volatile int last_MinSpeed = 10;
+volatile int last_SpoolDiameter = 20;
+volatile double SDia = 0.0;
 volatile bool update_screen = false;
 volatile int LineLength = 0;
 volatile int Position1 = 1;
 volatile bool Pos0 = false;
-volatile int Position101 = 0;
-volatile int Position102 = 0;
-volatile int Position103 = 0;
-volatile int Position104 = 0;
-volatile int Position105 = 0;
-volatile int Position106 = 0;
-volatile int Position107 = 0;
-volatile int Position108 = 0;
-volatile int Position109 = 0;
-volatile int Position110 = 0;
-volatile int Position111 = 0;
-volatile int Position112 = 0;
-volatile int Position113 = 0;
-volatile int Position114 = 0;
-volatile int Position115 = 0;
+volatile int Position2[15] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+volatile int lastPosition2[15] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75};
 volatile bool DragNext = false;
 //leave alone
 static int encoder_value = 0;
@@ -81,15 +66,6 @@ static uint32_t last_read_time = 0;
 const uint32_t debounce_delay = 50;
 volatile int last_encoder_A = 0;
 volatile int last_encoder_B = 0;
-
-// Bluetooth Variables
-extern volatile uint16_t line_length;
-extern volatile uint16_t drag_set;
-extern volatile uint8_t motor_status;
-extern volatile uint8_t motor_speed;
-extern volatile uint8_t fish_alarm;
-extern volatile uint8_t auto_stop_length;
-extern volatile uint8_t measurement_system;
 
 // Function to send a command to the LCD
 void cfa634_send_command(uint8_t cmd) {
@@ -144,20 +120,20 @@ void RecalibrateDrag(int Position){
     if (Pos0){
         switch(Position-1){
             case 0:
-                char display_value[21];
-                sprintf(display_value, "         %02d         ", Position101);  // %02d ensures two-digit format
+                char display_value0[21];
+                sprintf(display_value0, "         %02d         ", lastPosition2[1]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 1      ");
                 setcursor(0, 1);
                 cfa634_print("  DRAG VALUE 0-99   ");
                 setcursor(0, 2);
-                cfa634_print(display_value);
+                cfa634_print(display_value0);
                 setcursor(0, 3);
                 cfa634_print("      R > NEXT      ");
                 break;
             case 1:
                 char display_value1[21];
-                sprintf(display_value1, "         %02d         ", Position102);  // %02d ensures two-digit format
+                sprintf(display_value1, "         %02d         ", lastPosition2[2]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 2      ");
                 setcursor(0, 1);
@@ -169,7 +145,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 2:
                 char display_value2[21];
-                sprintf(display_value2, "         %02d         ", Position103);  // %02d ensures two-digit format
+                sprintf(display_value2, "         %02d         ", lastPosition2[3]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 3      ");
                 setcursor(0, 1);
@@ -181,7 +157,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 3:
                 char display_value3[21];
-                sprintf(display_value3, "         %02d         ", Position104);  // %02d ensures two-digit format
+                sprintf(display_value3, "         %02d         ", lastPosition2[4]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 4      ");
                 setcursor(0, 1);
@@ -193,7 +169,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 4:
                 char display_value4[21];
-                sprintf(display_value4, "         %02d         ", Position105);  // %02d ensures two-digit format
+                sprintf(display_value4, "         %02d         ", lastPosition2[5]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 5      ");
                 setcursor(0, 1);
@@ -205,7 +181,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 5:
                 char display_value5[21];
-                sprintf(display_value5, "         %02d         ", Position106);  // %02d ensures two-digit format
+                sprintf(display_value5, "         %02d         ", lastPosition2[6]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 6      ");
                 setcursor(0, 1);
@@ -217,7 +193,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 6:
                 char display_value6[21];
-                sprintf(display_value6, "         %02d         ", Position107);  // %02d ensures two-digit format
+                sprintf(display_value6, "         %02d         ", lastPosition2[7]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 7      ");
                 setcursor(0, 1);
@@ -229,7 +205,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 7:
                 char display_value7[21];
-                sprintf(display_value7, "         %02d         ", Position108);  // %02d ensures two-digit format
+                sprintf(display_value7, "         %02d         ", lastPosition2[8]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 8      ");
                 setcursor(0, 1);
@@ -241,7 +217,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 8:
                 char display_value8[21];
-                sprintf(display_value8, "         %02d         ", Position109);  // %02d ensures two-digit format
+                sprintf(display_value8, "         %02d         ", lastPosition2[9]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 9      ");
                 setcursor(0, 1);
@@ -253,7 +229,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 9:
                 char display_value9[21];
-                sprintf(display_value9, "         %02d         ", Position110);  // %02d ensures two-digit format
+                sprintf(display_value9, "         %02d         ", lastPosition2[10]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 10     ");
                 setcursor(0, 1);
@@ -265,7 +241,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 10:
                 char display_value10[21];
-                sprintf(display_value10, "         %02d         ", Position111);  // %02d ensures two-digit format
+                sprintf(display_value10, "         %02d         ", lastPosition2[11]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 11     ");
                 setcursor(0, 1);
@@ -277,7 +253,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 11:
                 char display_value11[21];
-                sprintf(display_value11, "         %02d         ", Position112);  // %02d ensures two-digit format
+                sprintf(display_value11, "         %02d         ", lastPosition2[12]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 12     ");
                 setcursor(0, 1);
@@ -289,7 +265,7 @@ void RecalibrateDrag(int Position){
                 break;
             case 12:
                 char display_value12[21];
-                sprintf(display_value12, "         %02d         ", Position113);  // %02d ensures two-digit format
+                sprintf(display_value12, "         %02d         ", lastPosition2[13]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 13     ");
                 setcursor(0, 1);
@@ -301,25 +277,13 @@ void RecalibrateDrag(int Position){
                 break;
             case 13:
                 char display_value13[21];
-                sprintf(display_value13, "         %02d         ", Position114);  // %02d ensures two-digit format
+                sprintf(display_value13, "         %02d         ", lastPosition2[14]);  // %02d ensures two-digit format
                 setcursor(0, 0);
                 cfa634_print("    POSITION 14     ");
                 setcursor(0, 1);
                 cfa634_print("  DRAG VALUE 0-99   ");
                 setcursor(0, 2);
                 cfa634_print(display_value13);
-                setcursor(0, 3);
-                cfa634_print("     R > NEXT       ");
-                break;
-            case 14:
-                char display_value14[21];
-                sprintf(display_value14, "         %02d         ", Position115);  // %02d ensures two-digit format
-                setcursor(0, 0);
-                cfa634_print("    POSITION 15     ");
-                setcursor(0, 1);
-                cfa634_print("  DRAG VALUE 0-99   ");
-                setcursor(0, 2);
-                cfa634_print(display_value14);
                 setcursor(0, 3);
                 cfa634_print("     R > NEXT       ");
                 break;
@@ -392,7 +356,7 @@ void selectedmenudisplay(int pos) {
             setcursor(0, 0);
             cfa634_print("  ENTER MAX SPEED   ");
             setcursor(0, 1);
-            cfa634_print("   VALUE 45-100     ");
+            cfa634_print("   VALUE 50-100     ");
             setcursor(0, 2);
             cfa634_print(display_value1);
             setcursor(0, 3);
@@ -407,7 +371,7 @@ void selectedmenudisplay(int pos) {
             setcursor(0, 0);
             cfa634_print("  ENTER MIN SPEED   ");
             setcursor(0, 1);
-            cfa634_print("    VALUE 0-45      ");
+            cfa634_print("    VALUE 0-40      ");
             setcursor(0, 2); 
             cfa634_print(display_value2);
             setcursor(0, 3);
@@ -416,13 +380,13 @@ void selectedmenudisplay(int pos) {
             }            
         case 6: {
             char display_value3[21];
-            sprintf(display_value3, "       .%d%d          ", (int)SpoolDiameter / 10, (int)SpoolDiameter % 10);  // Casting to int for display
+            sprintf(display_value3, "        %.1f          ", SpoolDiameter/10.0);  // Casting to int for display
             
             // Update display immediately
             setcursor(0, 0);
             cfa634_print("  ENTER Spool DI-   ");
             setcursor(0, 1);
-            cfa634_print("  AMETER VAL 0-99   ");
+            cfa634_print("  AMETER VAL 0.0-9.9   ");
             setcursor(0, 2);
             cfa634_print(display_value3);
             setcursor(0, 3);
@@ -437,14 +401,14 @@ void selectedmenudisplay(int pos) {
             setcursor(0, 2);
             cfa634_print("    LEFT < YES      ");
             setcursor(0, 3);
-            cfa634_print("                    ");
+            cfa634_print("  PRESS DIAL > RET  ");
             break;
         default: 
             break;
     }
 }
 void settingsdisplay(int pos){
-    sleep_ms(50);
+    //sleep_ms(25);
     switch (pos) {
         case 0:
             setcursor(0, 0);
@@ -636,19 +600,17 @@ void read_btn() {
         left_pressed = true;  
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
-            // Restore previous value on cancel
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
             if (menu_index == 4) MaxSpeed = last_MaxSpeed;
             if (menu_index == 5) MinSpeed = last_MinSpeed;
             if (menu_index == 6) SpoolDiameter = last_SpoolDiameter;
-            
             in_submenu = false;  
             settingsdisplay(menu_index);  // Exit submenu without saving
         } else if (menu_index == 3) {  
             isImperial = false;  
-            measurement_system = 1;
         } else if (menu_index == 7){
             Pos0 = true;
+            Position1 = 1;
             DragNext = false;
             RecalibrateDrag(Position1);
         }
@@ -658,19 +620,22 @@ void read_btn() {
         right_pressed = true;  
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
-            // Confirm changes and exit submenu
+            // Save to last variable then exit
+            if (menu_index == 2) last_AutoStopLen = AutoStopLen;
+            if (menu_index == 4) last_MaxSpeed = MaxSpeed;
+            if (menu_index == 5) last_MinSpeed = MinSpeed;
+            if (menu_index == 6) last_SpoolDiameter = SpoolDiameter;
             in_submenu = false;  
             settingsdisplay(menu_index);  
         } else if (menu_index == 3) {  
             isImperial = true;  
-            measurement_system = 0;
         } else if (menu_index == 7){
             if (Pos0 == true) {
-                if ((Position1) < 15){
+                if ((Position1) < 14){
                     DragNext = true;
                     Position1 ++;
-                    RecalibrateDrag(Position1);
-                } else if (Position1 == 15){
+                    //RecalibrateDrag(Position1);
+                } else if (Position1 == 14){
                     in_submenu = false;
                     Pos0 = false;
                     settingsdisplay(menu_index);
@@ -687,7 +652,7 @@ void encoder_isr(uint gpio, uint32_t events) {
     static uint32_t last_update = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
 
-    if (now - last_update < 5) return;  // Short debounce for stability
+    if (now - last_update < DEBOUNCE_TIME_MS) return;  // Short debounce for stability
     last_update = now;
 
     // Read current encoder state
@@ -702,51 +667,101 @@ void encoder_isr(uint gpio, uint32_t events) {
     if ((A != last_A) || (B != last_B)) {  
         if (A == last_B) {  // Clockwise direction (A follows B)
             pulse_count++;
-            //printf("CW Pulse | Counter: %d\n", pulse_count);
         } else {  // Counterclockwise direction (B follows A)
             pulse_count--;
-            //printf("CCW Pulse | Counter: %d\n", pulse_count);
         }
 
         // Update menu and position variables every 3 pulses
-        if (pulse_count >= 3) {  
+        if (pulse_count >= 4) {  
             if (in_submenu) {
-                if (menu_index == 2 && AutoStopLen < 99) AutoStopLen++;
-                else if (menu_index == 4 && MaxSpeed < 100) MaxSpeed += 10;
-                else if (menu_index == 5 && MinSpeed < 45) MinSpeed += 10;
-                else if (menu_index == 6 && SpoolDiameter < 99) SpoolDiameter++;
+                if (menu_index == 2 && AutoStopLen < 99) {
+                    AutoStopLen = last_AutoStopLen;
+                    AutoStopLen++;
+                }
+                else if (menu_index == 4 && MaxSpeed < 100) {
+                    MaxSpeed = last_MaxSpeed;
+                    MaxSpeed += 10;
+                }
+                else if (menu_index == 5 && MinSpeed < 45) {
+                    MinSpeed = last_MinSpeed;
+                    MinSpeed += 10;
+                }
+                else if (menu_index == 6 && SpoolDiameter < 99) {
+                    SpoolDiameter = last_SpoolDiameter;
+                    SpoolDiameter++;
+                }
+                else if (menu_index == 7) {
+                    // Update only the variable corresponding to Position1
+                    for (int i = 1; i < 15; i++) {
+                        Position2[i] = lastPosition2[i];  // Copy each element individually
+                    } // this helps to save the value so it doesnt restart from zero
+                    if (Position1 == 1 && Position2[1] < 99) Position2[1]++;
+                    if (Position1 == 2 && Position2[2] < 99) Position2[2]++;
+                    if (Position1 == 3 && Position2[3] < 99) Position2[3]++;
+                    if (Position1 == 4 && Position2[4] < 99) Position2[4]++;
+                    if (Position1 == 5 && Position2[5] < 99) Position2[5]++;
+                    if (Position1 == 6 && Position2[6] < 99) Position2[6]++;
+                    if (Position1 == 7 && Position2[7] < 99) Position2[7]++;
+                    if (Position1 == 8 && Position2[8] < 99) Position2[8]++;
+                    if (Position1 == 9 && Position2[9] < 99) Position2[9]++;
+                    if (Position1 == 10 && Position2[10] < 99) Position2[10]++;
+                    if (Position1 == 11 && Position2[11] < 99) Position2[11]++;
+                    if (Position1 == 12 && Position2[12] < 99) Position2[12]++;
+                    if (Position1 == 13 && Position2[13] < 99) Position2[13]++;
+                    if (Position1 == 14 && Position2[14] < 99) Position2[14]++;
+                    for (int i = 1; i < 15; i++) {
+                        lastPosition2[i] = Position2[i];  // Copy each element individually
+                    }
+                }
                 menuActive = true;
             } else {
                 menu_index = (menu_index < 7) ? menu_index + 1 : 7;
                 update_screen = true;
             }
-
-            // Update only the variable corresponding to Position1
-            if (Position1 == 1 && Position101 < 99) Position101++;
-            if (Position1 == 2 && Position102 < 99) Position102++;
-            if (Position1 == 3 && Position103 < 99) Position103++;
-            if (Position1 == 4 && Position104 < 99) Position104++;
-            if (Position1 == 5 && Position105 < 99) Position105++;
-            if (Position1 == 6 && Position106 < 99) Position106++;
-            if (Position1 == 7 && Position107 < 99) Position107++;
-            if (Position1 == 8 && Position108 < 99) Position108++;
-            if (Position1 == 9 && Position109 < 99) Position109++;
-            if (Position1 == 10 && Position110 < 99) Position110++;
-            if (Position1 == 11 && Position111 < 99) Position111++;
-            if (Position1 == 12 && Position112 < 99) Position112++;
-            if (Position1 == 13 && Position113 < 99) Position113++;
-            if (Position1 == 14 && Position114 < 99) Position114++;
-            if (Position1 == 15 && Position115 < 99) Position115++;
-
             printf("Menu Index Incremented: %d | Position1: %d\n", menu_index, Position1);
             pulse_count = 0;  // Reset counter after update
         } 
         else if (pulse_count <= -3) {  
             if (in_submenu) {
-                if (menu_index == 2 && AutoStopLen > 0) AutoStopLen--;
-                else if (menu_index == 4 && MaxSpeed > 45) MaxSpeed -= 10;
-                else if (menu_index == 5 && MinSpeed > 0) MinSpeed -= 10;
-                else if (menu_index == 6 && SpoolDiameter > 0) SpoolDiameter--;
+                if (menu_index == 2 && AutoStopLen > 0) {
+                    AutoStopLen = last_AutoStopLen;
+                    AutoStopLen--;
+                }
+                else if (menu_index == 4 && MaxSpeed > 45) {
+                    MaxSpeed = last_MaxSpeed;
+                    MaxSpeed -= 10;
+                }
+                else if (menu_index == 5 && MinSpeed > 0) {
+                    MinSpeed = last_MinSpeed;
+                    MinSpeed -= 10;
+                }
+                else if (menu_index == 6 && SpoolDiameter > 0) {
+                    SpoolDiameter = last_SpoolDiameter;
+                    SpoolDiameter--;
+                }
+                else if (menu_index == 7) {
+                    // Update only the variable corresponding to Position1
+                    for (int i = 1; i < 15; i++) {
+                        Position2[i] = lastPosition2[i];  // Copy each element individually
+                    } // this helps to save the value so it doesnt restart from zero
+                    if (Position1 == 1 && Position2[1] < 99) Position2[1]--;
+                    if (Position1 == 2 && Position2[2] < 99) Position2[2]--;
+                    if (Position1 == 3 && Position2[3] < 99) Position2[3]--;
+                    if (Position1 == 4 && Position2[4] < 99) Position2[4]--;
+                    if (Position1 == 5 && Position2[5] < 99) Position2[5]--;
+                    if (Position1 == 6 && Position2[6] < 99) Position2[6]--;
+                    if (Position1 == 7 && Position2[7] < 99) Position2[7]--;
+                    if (Position1 == 8 && Position2[8] < 99) Position2[8]--;
+                    if (Position1 == 9 && Position2[9] < 99) Position2[9]--;
+                    if (Position1 == 10 && Position2[10] < 99) Position2[10]--;
+                    if (Position1 == 11 && Position2[11] < 99) Position2[11]--;
+                    if (Position1 == 12 && Position2[12] < 99) Position2[12]--;
+                    if (Position1 == 13 && Position2[13] < 99) Position2[13]--;
+                    if (Position1 == 14 && Position2[14] < 99) Position2[14]--;
+                    for (int i = 1; i < 15; i++) {
+                        lastPosition2[i] = Position2[i];  // Copy each element individually
+                    }
+                }
                 menuActive = true;
             } else {
                 menu_index = (menu_index > 0) ? menu_index - 1 : 0;
@@ -754,29 +769,10 @@ void encoder_isr(uint gpio, uint32_t events) {
             }
 
             // Decrease only the variable corresponding to Position1
-            if (Position1 == 1 && Position101 > 0) Position101--;
-            if (Position1 == 2 && Position102 > 0) Position102--;
-            if (Position1 == 3 && Position103 > 0) Position103--;
-            if (Position1 == 4 && Position104 > 0) Position104--;
-            if (Position1 == 5 && Position105 > 0) Position105--;
-            if (Position1 == 6 && Position106 > 0) Position106--;
-            if (Position1 == 7 && Position107 > 0) Position107--;
-            if (Position1 == 8 && Position108 > 0) Position108--;
-            if (Position1 == 9 && Position109 > 0) Position109--;
-            if (Position1 == 10 && Position110 > 0) Position110--;
-            if (Position1 == 11 && Position111 > 0) Position111--;
-            if (Position1 == 12 && Position112 > 0) Position112--;
-            if (Position1 == 13 && Position113 > 0) Position113--;
-            if (Position1 == 14 && Position114 > 0) Position114--;
-            if (Position1 == 15 && Position115 > 0) Position115--;
-
             printf("Menu Index Decremented: %d | Position1: %d\n", menu_index, Position1);
             pulse_count = 0;  // Reset counter after update
         }
     }
-
-    auto_stop_length = AutoStopLen;
-
 
     last_A = A;
     last_B = B;
@@ -809,15 +805,15 @@ void check_encoder() {
                     in_submenu = true;  
                     
                     // Store last known values before modifying
-                    if (menu_index == 2) last_AutoStopLen = AutoStopLen;
-                    if (menu_index == 4) last_MaxSpeed = MaxSpeed;
-                    if (menu_index == 5) last_MinSpeed = MinSpeed;
-                    if (menu_index == 6) last_SpoolDiameter = SpoolDiameter;
+                    if (menu_index == 2) AutoStopLen = last_AutoStopLen;
+                    if (menu_index == 4) MaxSpeed = last_MaxSpeed;
+                    if (menu_index == 5) MinSpeed = last_MinSpeed;
+                    if (menu_index == 6) SpoolDiameter = last_SpoolDiameter;
                     
                     selectedmenudisplay(selected_menu);  
                 } 
                 // **Only close menu 3 with a short press**
-                else if (in_submenu && menu_index == 3) {
+                else if (in_submenu && (menu_index == 3 || menu_index ==7)) {
                     in_submenu = false;
                     settingsdisplay(menu_index);
                 }
@@ -879,6 +875,9 @@ void screen_update(int linelength, int dragset) {
                 } else if (menu_index == 6 && SpoolDiameter != last_SpoolDiameter) { // Check if SpoolDiameter changed
                     selectedmenudisplay(menu_index);
                     last_SpoolDiameter = SpoolDiameter;  // Store the new value
+                } else if (menu_index == 7 && Position2 != lastPosition2 || DragNext == true){
+                    DragNext = false;
+                    RecalibrateDrag(Position1);
                 }
             }
         } else {
@@ -890,7 +889,7 @@ void screen_update(int linelength, int dragset) {
         }
     }
     
-    sleep_ms(100); // Add small delay to prevent excessive updates
+    //sleep_ms(100); // Add small delay to prevent excessive updates
 }
 void screen_setup(){
     stdio_init_all();
@@ -900,9 +899,6 @@ void screen_setup(){
     cfa634_clear_screen();
     cfa634_send_command(0x14);
 }
-
-
-/*
 int main() {
     screen_setup();
     int linelength = 0;
@@ -911,4 +907,3 @@ int main() {
         screen_update(linelength, dragset);
     }
 }
-*/
