@@ -49,11 +49,14 @@ target_link_libraries(MobileDevice
         pico_stdlib
         )
 
+add_subdirectory(lib/pico-vfs)
+
 # Add the standard include files to the build
 target_include_directories(MobileDevice PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${BTSTACK_ROOT}/src
         ${BTSTACK_ROOT}/src/ble
+        ${CMAKE_CURRENT_LIST_DIR}/lib/pico-vfs/include
         )
 
 # Add any user requested libraries
@@ -64,6 +67,7 @@ target_link_libraries(MobileDevice
         pico_btstack_ble
         pico_btstack_cyw43
         pico_cyw43_arch_none
+        filesystem_vfs
         )
 
 target_compile_definitions(MobileDevice PRIVATE
@@ -74,5 +78,10 @@ target_compile_definitions(MobileDevice PRIVATE
         -DENABLE_ATT_CLIENT
         )
 
+
+
 pico_add_extra_outputs(MobileDevice)
+
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-Map=firmware.map")
+
 

@@ -66,8 +66,10 @@
  #include "hardware/adc.h"
  #include "client.h"
  #include "pico/multicore.h"
+ #include "pico/flash.h"
  #include "hardware/flash.h"
- #include "hardware/sync.h"
+
+
 
  // Function to update an icon on the LCD.
  typedef enum {
@@ -77,7 +79,8 @@
  } IconMode;
 
   // Struct for saving settings
-  typedef struct {
+  typedef struct __attribute__((aligned(4))) {
+    uint32_t magic;
     int brightness;
     int contrast;
     int reel_speed;
@@ -85,6 +88,7 @@
     uint32_t crc32;
  } settings_t;
 
+ #define SETTINGS_MAGIC 0xDEADBEEF
 
  // =========================
  // New PWM Settings for Contrast & Brightness
@@ -195,55 +199,56 @@ float get_battery_voltage() {
  extern volatile uint8_t fish_alarm;
  extern volatile uint8_t auto_stop_length;
  extern volatile uint8_t measurement_system;
- extern uint8_t __flash_binary_end;
  settings_t current_settings;
 
+ #define SETTINGS_FLASH_OFFSET (1408 * 1024)  // 1.375 MB — safely beyond most code sizes
+ #define SETTINGS_SECTOR_SIZE  FLASH_SECTOR_SIZE
+ #define SETTINGS_PAGE_SIZE    FLASH_PAGE_SIZE
 
- #define FLASH_TARGET_OFFSET (1536 * 1024)  // 1.5MB = 0x180000
+ const settings_t *saved_settings_ptr = (const settings_t *)(XIP_BASE + SETTINGS_FLASH_OFFSET);
 
- // Function for verifying available space in flash memory for storing settings
- void check_flash_size() {
-    uint32_t used_flash = (uintptr_t)&__flash_binary_end - XIP_BASE;
-    printf("Flash used by firmware: %lu bytes\n", used_flash);
+ static void call_flash_range_erase(void *param) {
+    flash_range_erase((uint32_t)param, SETTINGS_SECTOR_SIZE);
  }
 
- uint32_t calculate_crc32(const void *data, size_t length) {
-    uint32_t crc = 0xFFFFFFFF;
-    const uint8_t *bytes = (const uint8_t *)data;
-    for (size_t i = 0; i < length; i++) {
-        crc ^= bytes[i];
-        for (int j = 0; j < 8; j++) {
-            crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
-        }
-    }
-    return ~crc;
+ static void call_flash_range_program(void *param) {
+    uint32_t offset = ((uintptr_t*)param)[0];
+    const uint8_t *data = (const uint8_t *)((uintptr_t*)param)[1];
+    flash_range_program(offset, data, FLASH_PAGE_SIZE);
  }
 
- void save_settings_to_flash(const settings_t *settings) {
-    settings_t temp = *settings;
-    temp.crc32 = calculate_crc32(&temp, sizeof(settings_t) - sizeof(uint32_t));
 
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_erase(FLASH_TARGET_OFFSET, 4096);
-    flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t *)&temp, sizeof(settings_t));
-    restore_interrupts(ints);
+ bool save_settings(const settings_t *settings) {
+    settings_t settings = *settings_ptr;
+    settings.magic = SETTINGS_MAGIC;
 
-    printf("[FLASH] Settings saved.\n");
-}
+    // Allocate a full page buffer
+    uint8_t page_buffer[SETTINGS_PAGE_SIZE] = {0};
+    memcpy(page_buffer, settings, sizeof(settings_t));
 
-bool load_settings_from_flash(settings_t *settings) {
-    const settings_t *flash_settings = (const settings_t *)(XIP_BASE + FLASH_TARGET_OFFSET);
-    uint32_t crc = calculate_crc32(flash_settings, sizeof(settings_t) - sizeof(uint32_t));
+    // Erase sector
+    int rc = flash_safe_execute(call_flash_range_erase, (void*)SETTINGS_FLASH_OFFSET, UINT32_MAX);
+    if (rc != PICO_OK) return false;
 
-    if (crc == flash_settings->crc32) {
-        memcpy(settings, flash_settings, sizeof(settings_t));
-        printf("[FLASH] Settings loaded.\n");
-        return true;
-    } else {
-        printf("[FLASH] Invalid or uninitialized settings.\n");
-        return false;
-    }
-}
+    // Program page
+    uintptr_t params[] = { SETTINGS_FLASH_OFFSET, (uintptr_t)page_buffer };
+    rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
+    return rc == PICO_OK;
+ }
+
+ bool load_settings(settings_t *settings_out) {
+     const settings_t *flash_data = (const settings_t *)(XIP_BASE + SETTINGS_FLASH_OFFSET);
+
+     if (flash_data->magic != SETTINGS_MAGIC) {
+         return false;  // No valid settings saved yet
+     }
+ 
+     memcpy(settings_out, flash_data, sizeof(settings_t));
+     return true;
+ }
+
+
+
 
  
  // =========================
@@ -611,9 +616,16 @@ void create_bluetooth_char(void) {
                  current_settings.contrast = contrast_value;
                  current_settings.reel_speed = reel_speed;
                  current_settings.alarm_enabled = alarm_enabled;
-                 save_settings_to_flash(&current_settings); // Save settings to flash memory.
+                 printf("[DEBUG] About to save settings to flash...\n");
+                 save_settings(&current_settings);
+                 const uint8_t *raw = (const uint8_t *)(XIP_BASE + SETTINGS_FLASH_OFFSET);
+                 printf("First 16 bytes of saved flash:\n");
+                 for (int i = 0; i < 16; i++) {
+                     printf("%02X ", raw[i]);
+                 }
+                 printf("\n");
 
-                
+ 
                  printf("[SAVE] Settings saved:\n");
                  printf("        Reel Speed: %d%%\n", reel_speed);
                  printf("        Auto Stop Length: %d FT\n", stop_length);
@@ -1036,13 +1048,17 @@ void BT_Core(void) {
      
      gpio_setup();
 
-     if (!load_settings_from_flash(&current_settings)) {
-         // Defaults
-         current_settings.brightness = 100;
-         current_settings.contrast = 50;
-         current_settings.reel_speed = 50;
-         current_settings.alarm_enabled = true;
-     }
+     if (!load_settings(&current_settings)) {
+        printf("Saved settings not found! Loading defaults...\n");
+        current_settings.brightness = 100;
+        current_settings.contrast = 50;
+        current_settings.reel_speed = 50;
+        current_settings.alarm_enabled = true;
+    } else {
+        printf("Settings successfully loaded! Brightness: %d%%, Contrast: %d%%, Reel Speed: %d%%, Alarm: %s\n",
+               current_settings.brightness, current_settings.contrast, current_settings.reel_speed,
+               current_settings.alarm_enabled ? "ON" : "OFF");
+    }
 
      // Sync to runtime variables
      brightness_value = current_settings.brightness;
