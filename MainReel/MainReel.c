@@ -400,6 +400,7 @@ int main() {
             reg_count++; // Debouncer without slowing code down
             if (reg_count >= 20000) {
                 reg = !reg;
+                printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
             }
         }
         // Buzzer Logic
