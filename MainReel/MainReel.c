@@ -245,6 +245,7 @@ int main() {
     int newValdrag = 0;
     int buttonPressed = 0;
     int button = 0;
+    int reg_count = 0;
 
     while (true) {
         /*if (gpio_get(15) == 1){ // If button is pressed, reset drag count
@@ -390,10 +391,12 @@ int main() {
         // Read buttons (Active High: 1 when pressed, 0 when not pressed)
         int B1 = gpio_get(B1_PIN);  
         int B2 = gpio_get(B2_PIN);
-        // Toggle reg only when both buttons are pressed
+        // Toggle reg only when both buttons are pressed (Turns fish alarm functionality on/off)
         if (B1 == 1 && B2 ==1) { //THIS IS FOR MULTIPLE INPUTS
-            reg = !reg;
-            sleep_ms(1000);  // Debounce delay
+            reg_count++; // Debouncer without slowing code down
+            if (reg_count >= 20000) {
+                reg = !reg;
+            }
         }
         // Buzzer Logic
         if (reg && drag != 0 && New_Length > Old_Length) {
