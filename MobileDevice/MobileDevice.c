@@ -66,8 +66,8 @@
  #include "hardware/adc.h"
  #include "client.h"
  #include "pico/multicore.h"
- #include "pico/flash.h"
- #include "hardware/flash.h"
+ //#include "pico/flash.h"
+ //#include "hardware/flash.h"
 
 
 
@@ -78,6 +78,8 @@
      ICON_BLINK   // Display the blinking version of the icon
  } IconMode;
 
+
+ /*
   // Struct for saving settings
   typedef struct __attribute__((aligned(4))) {
     uint32_t magic;
@@ -88,7 +90,7 @@
     uint32_t crc32;
  } settings_t;
 
- #define SETTINGS_MAGIC 0xDEADBEEF
+ #define SETTINGS_MAGIC 0xDEADBEEF */
 
  // =========================
  // New PWM Settings for Contrast & Brightness
@@ -199,41 +201,42 @@ float get_battery_voltage() {
  extern volatile uint8_t fish_alarm;
  extern volatile uint8_t auto_stop_length;
  extern volatile uint8_t measurement_system;
- settings_t current_settings;
+ //settings_t current_settings;
 
- #define SETTINGS_FLASH_OFFSET (1408 * 1024)  // 1.375 MB — safely beyond most code sizes
+ /*
+ #define SETTINGS_FLASH_OFFSET ((uint32_t)(&flash_settings) - XIP_BASE)
  #define SETTINGS_SECTOR_SIZE  FLASH_SECTOR_SIZE
  #define SETTINGS_PAGE_SIZE    FLASH_PAGE_SIZE
 
  const settings_t *saved_settings_ptr = (const settings_t *)(XIP_BASE + SETTINGS_FLASH_OFFSET);
 
- static void call_flash_range_erase(void *param) {
+ static void __not_in_flash_func(call_flash_range_erase)(void *param) {
     flash_range_erase((uint32_t)param, SETTINGS_SECTOR_SIZE);
  }
 
- static void call_flash_range_program(void *param) {
+ static void __not_in_flash_func(call_flash_range_program)(void *param) {
     uint32_t offset = ((uintptr_t*)param)[0];
     const uint8_t *data = (const uint8_t *)((uintptr_t*)param)[1];
     flash_range_program(offset, data, FLASH_PAGE_SIZE);
  }
 
+ bool save_settings(const settings_t *settings_in) {
+     settings_t temp = *settings_in;
+     temp.magic = SETTINGS_MAGIC;
 
- bool save_settings(const settings_t *settings) {
-    settings_t settings = *settings_ptr;
-    settings.magic = SETTINGS_MAGIC;
-
-    // Allocate a full page buffer
-    uint8_t page_buffer[SETTINGS_PAGE_SIZE] = {0};
-    memcpy(page_buffer, settings, sizeof(settings_t));
+    // Allocate a static buffer so it's in flash-eligible memory space
+     static uint8_t page_buffer[FLASH_PAGE_SIZE];
+     memset(page_buffer, 0xFF, FLASH_PAGE_SIZE);  // Fill with 0xFF for a clean write
+     memcpy(page_buffer, &temp, sizeof(settings_t));
 
     // Erase sector
-    int rc = flash_safe_execute(call_flash_range_erase, (void*)SETTINGS_FLASH_OFFSET, UINT32_MAX);
-    if (rc != PICO_OK) return false;
+     int rc = flash_safe_execute(call_flash_range_erase, (void *)SETTINGS_FLASH_OFFSET, UINT32_MAX);
+     if (rc != PICO_OK) return false;
 
-    // Program page
-    uintptr_t params[] = { SETTINGS_FLASH_OFFSET, (uintptr_t)page_buffer };
-    rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
-    return rc == PICO_OK;
+     // Program page
+     uintptr_t params[] = { SETTINGS_FLASH_OFFSET, (uintptr_t)page_buffer };
+     rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
+     return rc == PICO_OK;
  }
 
  bool load_settings(settings_t *settings_out) {
@@ -246,11 +249,8 @@ float get_battery_voltage() {
      memcpy(settings_out, flash_data, sizeof(settings_t));
      return true;
  }
+     */
 
-
-
-
- 
  // =========================
  // LCD Helper Functions
  // =========================
@@ -612,6 +612,7 @@ void create_bluetooth_char(void) {
          if (duration < 3000) { // Short press.
              // Option 7 (index 6) is Save Settings.
              if (menu_index == 6) {
+                /*
                  current_settings.brightness = brightness_value;
                  current_settings.contrast = contrast_value;
                  current_settings.reel_speed = reel_speed;
@@ -624,8 +625,7 @@ void create_bluetooth_char(void) {
                      printf("%02X ", raw[i]);
                  }
                  printf("\n");
-
- 
+                 */
                  printf("[SAVE] Settings saved:\n");
                  printf("        Reel Speed: %d%%\n", reel_speed);
                  printf("        Auto Stop Length: %d FT\n", stop_length);
@@ -1048,6 +1048,7 @@ void BT_Core(void) {
      
      gpio_setup();
 
+     /*
      if (!load_settings(&current_settings)) {
         printf("Saved settings not found! Loading defaults...\n");
         current_settings.brightness = 100;
@@ -1065,7 +1066,7 @@ void BT_Core(void) {
      contrast_value = current_settings.contrast;
      reel_speed = current_settings.reel_speed;
      alarm_enabled = current_settings.alarm_enabled;
-
+     */
 
      init_pwm_display_settings();
      lcd_init();

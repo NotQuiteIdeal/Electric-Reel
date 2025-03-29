@@ -34,7 +34,6 @@ project(MobileDevice C CXX ASM)
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
-
 add_executable(MobileDevice MobileDevice.c client.c)
 
 pico_set_program_name(MobileDevice "MobileDevice")
@@ -49,14 +48,11 @@ target_link_libraries(MobileDevice
         pico_stdlib
         )
 
-add_subdirectory(lib/pico-vfs)
-
 # Add the standard include files to the build
 target_include_directories(MobileDevice PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${BTSTACK_ROOT}/src
         ${BTSTACK_ROOT}/src/ble
-        ${CMAKE_CURRENT_LIST_DIR}/lib/pico-vfs/include
         )
 
 # Add any user requested libraries
@@ -67,7 +63,6 @@ target_link_libraries(MobileDevice
         pico_btstack_ble
         pico_btstack_cyw43
         pico_cyw43_arch_none
-        filesystem_vfs
         )
 
 target_compile_definitions(MobileDevice PRIVATE
