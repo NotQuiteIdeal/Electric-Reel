@@ -244,7 +244,9 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
 
     if (attribute_handle == MOTOR_SPEED_VALUE_HANDLE) {
         if (buffer_size == 1) {
-            motor_speed = buffer[0];
+            if (motor_speed == 0) {
+                motor_speed = buffer[0]; // Safety Mechanism, prevents reel from activating while being used.
+            }
             //printf("Received motor speed: %d\n", motor_speed);
         }
         return 0;

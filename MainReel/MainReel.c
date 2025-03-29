@@ -157,7 +157,7 @@ void core1() {
     // Initialize screen
     screen_setup();
 
-    sleep_ms(4000);
+    //sleep_ms(4000);
 
     // Initialize CYW43 driver
     if (cyw43_arch_init()) {
@@ -339,7 +339,7 @@ int main() {
              if (rotations >=1) {
                  length = calculate_length(Dmax, Dmin, rotations);
                  line_length = length;
-                 printf("Reel Line Length: %d\n", length);
+                 //printf("Reel Line Length: %d\n", length);
              }
          }
          oldVal = newVal;
@@ -383,6 +383,7 @@ int main() {
             if (count_drag >=1) {
                 drag =  update_drag(count_drag);
                 drag_set = drag;
+                printf("%d\n", drag);
                 
                 
             }
@@ -398,7 +399,7 @@ int main() {
         // Toggle reg only when both buttons are pressed (Turns fish alarm functionality on/off)
         if (B1 == 1 && B2 ==1) { //THIS IS FOR MULTIPLE INPUTS
             reg_count++; // Debouncer without slowing code down
-            if (reg_count >= 20000) {
+            if (reg_count >= 600000) {
                 reg_count = 0; // Reset counter after toggling
                 reg = !reg;
                 printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
@@ -408,7 +409,10 @@ int main() {
         if (reg && drag != 0 && New_Length > Old_Length) {
             fish_alarm = 1;
             printf("Fish alarm on!\n");
-        } else  {
+        } else if (reg && drag != 0 && New_Length == Old_Length && fish_alarm == 1) {
+            fish_alarm = 1;
+            printf("Fish alarm still on!\n");
+        } else {
             fish_alarm = 0;
         }
         gpio_put(BUZZER_PIN, fish_alarm);

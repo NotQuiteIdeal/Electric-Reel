@@ -673,7 +673,6 @@ void create_bluetooth_char(void) {
                 write_measurement_system(metric_mode);
                 break;
             case 3:
-                write_fish_alarm(alarm_enabled);
                 break;
             // case 0 is motor speed — skipped intentionally
         }
@@ -861,6 +860,9 @@ void create_bluetooth_char(void) {
  // Outside settings mode, holding the encoder button for more than 3 seconds enters the settings menu.
  void check_button_long_press(void) {
      if (!in_settings_menu && !gpio_get(ENCODER_BTN)) { // Button active low.
+         gpio_put(LED_28, 0);
+         gpio_put(LED_13, 0);
+         write_fish_alarm(0);
          if (!button_pressed) {
              button_pressed = true;
              button_press_time = to_ms_since_boot(get_absolute_time());
@@ -882,20 +884,25 @@ void create_bluetooth_char(void) {
  // BUTTON_15 controls LED_27.
  void handle_buttons(void) {
      if (gpio_get(BUTTON_26)) {
-         gpio_put(LED_28, 1);
          update_icon(1, ICON_SOLID);
-         if (alarm_enabled)
+         if (alarm_enabled) {
              gpio_put(LED_13, 1);
+             gpio_put(LED_28, 1);
+         }
      }
      if (gpio_get(BUTTON_14)) {
          gpio_put(LED_28, 0);
          gpio_put(LED_13, 0);
+         write_fish_alarm(0);
          update_icon(1, ICON_CLEAR);
      }
      static uint32_t button_15_press_time = 0;
      static bool led_27_on = false;
      static bool button_15_released = true;
      if (gpio_get(BUTTON_15)) {
+         gpio_put(LED_28, 0);
+         gpio_put(LED_13, 0);
+         write_fish_alarm(0);
          if (button_15_press_time == 0 && button_15_released) {
              button_15_press_time = to_ms_since_boot(get_absolute_time());
          } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 3000 && !led_27_on) {
@@ -915,8 +922,6 @@ void create_bluetooth_char(void) {
                  write_motor_speed(0);
              } else {
                  led_27_on = false;
-                 // Stops the motor
-                 write_motor_speed(0);
              }
              button_15_press_time = 0;
              button_15_released = true;
@@ -1022,7 +1027,7 @@ void init_pwm_display_settings(void) {
 // This function runs on core 1 and manages Bluetooth LE connection and notifications  
 void BT_Core(void) {
     stdio_init_all();
-    sleep_ms(4000);
+    //sleep_ms(4000);
 
     // Initialized BluetoothLE stack and attempts connection
     init_bluetooth();
@@ -1042,7 +1047,7 @@ void BT_Core(void) {
 
      multicore_launch_core1(BT_Core);
 
-     sleep_ms(5000);
+     //sleep_ms(5000);
 
      printf("[SYSTEM] Starting UI Components\n");
      

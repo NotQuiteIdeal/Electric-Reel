@@ -899,6 +899,8 @@ void screen_setup(){
     cfa634_clear_screen();
     cfa634_send_command(0x14);
 }
+
+/*
 int main() {
     screen_setup();
     int linelength = 0;
@@ -906,4 +908,4 @@ int main() {
     while (1) {
         screen_update(linelength, dragset);
     }
-}
+} */

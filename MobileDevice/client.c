@@ -23,7 +23,9 @@
 #define PING_CHAR_VALUE_HANDLE          0x001e
 #define PING_CHAR_CCCD_HANDLE           0x001f
 
-#define KNOWN_SERVER {0x2C, 0xCF, 0x67, 0x98, 0x8E, 0xDF}
+//#define KNOWN_SERVER {0x2C, 0xCF, 0x67, 0x98, 0x8E, 0xDF} // Main Reel Test Pico
+#define KNOWN_SERVER {0x28, 0xCD, 0xC1, 0x10, 0xA5, 0x24} // Headerless Pico 1
+
 
 // Global Variables
 client_state_t state = CLIENT_IDLE;
@@ -172,11 +174,11 @@ void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *pa
         switch (attribute_handle) {
             case 0x0009:
                 line_length = int_value;
-                printf("Line Length: %u\n", int_value);
+                //printf("Line Length: %u\n", int_value);
                 break;
             case 0x000C:
                 drag_set = int_value;
-                printf("Drag Set: %u\n", int_value);
+                //printf("Drag Set: %u\n", int_value);
                 break;
             case 0x000F:
                 motor_status = int_value;
