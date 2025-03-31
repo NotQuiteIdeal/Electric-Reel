@@ -65,6 +65,10 @@ extern volatile int last_AutoStopLen;
 extern volatile int last_menu_index;
 extern volatile bool menuActive;
 
+// Variable for motor control
+extern volatile int mobile_motor_control; // 0 is no, 1 is yes
+extern volatile bool in_settings_menu;
+
 
 // Function to send a ping notification
 void send_ping_notification() {
@@ -244,8 +248,10 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
 
     if (attribute_handle == MOTOR_SPEED_VALUE_HANDLE) {
         if (buffer_size == 1) {
-            if (motor_speed == 0) {
-                motor_speed = buffer[0]; // Safety Mechanism, prevents reel from activating while being used.
+            if (in_settings_menu == false && mobile_motor_control == 1) {
+                if (motor_speed == 0) {
+                    motor_speed = buffer[0]; // Safety Mechanism, prevents reel from activating while being used.
+                }
             }
             //printf("Received motor speed: %d\n", motor_speed);
         }

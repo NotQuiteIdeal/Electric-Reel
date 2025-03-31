@@ -35,6 +35,7 @@ extern uint8_t motor_speed;
 extern uint8_t fish_alarm;
 extern uint8_t ping_test_status;
 extern int ping_rate_count;
+volatile int mobile_motor_control = 0; // 0 is no, 1 is yes
 bool ping_start = false;
 struct repeating_timer timer2;
 
@@ -43,6 +44,9 @@ extern int le_notification_enabled;
 extern volatile int send_update_flag;
 
 // Define UI Variables
+extern volatile bool in_settings_menu;
+extern volatile int MaxSpeed;
+extern volatile int MinSpeed;
 
 
 // Define min and max duty cycle limits (default values)
@@ -120,6 +124,9 @@ uint16_t read_potentiometer() {
 // Function to set PWM duty cycle with limits
 void set_pwm_duty(uint16_t duty_cycle) {
     uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
+    min_duty = (MinSpeed * PWM_RESOLUTION) / 100; // Scale to 16-bit
+    max_duty = (MaxSpeed * PWM_RESOLUTION) / 100; // Scale to 16-bit
+    if (max_duty > 65000) max_duty = 65000; // Ensure max duty cycle does not exceed 100%
 
     // Constrain duty cycle within min and max limits
     if (duty_cycle < min_duty) duty_cycle = min_duty;
@@ -181,14 +188,21 @@ void core1() {
     // Set up timer for sending updates
     struct repeating_timer update_timer;
     add_repeating_timer_ms(-200, update_sender_callback, NULL, &update_timer);
+    uint16_t duty_cycle = 0;
+    uint16_t duty_cycle_test = 0;
 
     while (true) {
         
 
         // PWM Code
         uint16_t pot_value = read_potentiometer();
-        uint16_t duty_cycle = (pot_value * PWM_RESOLUTION) / 4095; // Scale to 16-bit
+        duty_cycle_test = (pot_value * PWM_RESOLUTION) / 4095; // Scale to 16-bit
 
+        if (mobile_motor_control == 0 || duty_cycle_test > 1000 || in_settings_menu == false) { // Tests if reel is control 
+            duty_cycle = duty_cycle_test;
+        } else {
+            duty_cycle = (motor_speed * PWM_RESOLUTION) / 100; // Scale to 16-bit
+        }
         // Apply limits
         set_pwm_duty(duty_cycle);
 
@@ -402,16 +416,16 @@ int main() {
             if (reg_count >= 600000) {
                 reg_count = 0; // Reset counter after toggling
                 reg = !reg;
-                printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
+                //printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
             }
         }
         // Buzzer Logic
         if (reg && drag != 0 && New_Length > Old_Length) {
             fish_alarm = 1;
-            printf("Fish alarm on!\n");
+            //printf("Fish alarm on!\n");
         } else if (reg && drag != 0 && New_Length == Old_Length && fish_alarm == 1) {
             fish_alarm = 1;
-            printf("Fish alarm still on!\n");
+            //rintf("Fish alarm still on!\n");
         } else {
             fish_alarm = 0;
         }

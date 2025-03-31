@@ -67,6 +67,8 @@ const uint32_t debounce_delay = 50;
 volatile int last_encoder_A = 0;
 volatile int last_encoder_B = 0;
 
+extern volatile int mobile_motor_control; // 0 is no, 1 is yes
+
 // Function to send a command to the LCD
 void cfa634_send_command(uint8_t cmd) {
     uint8_t buffer[1] = {cmd};  // Store the command in a buffer
@@ -598,6 +600,7 @@ void read_btn() {
 
     if (left_state && !last_left_state) {  
         left_pressed = true;  
+        mobile_motor_control = 0; // Set to 0 when left button is pressed
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
@@ -617,7 +620,8 @@ void read_btn() {
     }
 
     if (right_state && !last_right_state) {  
-        right_pressed = true;  
+        right_pressed = true; 
+        mobile_motor_control = 0; // Set to 0 when right button is pressed 
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Save to last variable then exit
@@ -665,6 +669,7 @@ void encoder_isr(uint gpio, uint32_t events) {
 
     // Detect pulse only when A or B changes
     if ((A != last_A) || (B != last_B)) {  
+        mobile_motor_control = 0; // Set to 0 when encoder is touched
         if (A == last_B) {  // Clockwise direction (A follows B)
             pulse_count++;
         } else {  // Counterclockwise direction (B follows A)
@@ -786,9 +791,9 @@ void check_encoder() {
     if (gpio_get(ENCODER_BTN) == 1) {  // Button is pressed
         if (!button_pressed) {  
             button_pressed = true; 
-            button_press_time = time_us_32(); 
+            button_press_time = time_us_64(); 
         }
-        else if ((time_us_32() - button_press_time > 3000000) && !button_was_pressed) {  
+        else if ((time_us_64() - button_press_time > 3000000) && !button_was_pressed) {  
             in_settings_menu = true;  
             menu_index = 0;  
             settingsdisplay(menu_index);  
