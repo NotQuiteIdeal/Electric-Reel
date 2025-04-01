@@ -23,8 +23,8 @@
 #define PING_CHAR_VALUE_HANDLE          0x001e
 #define PING_CHAR_CCCD_HANDLE           0x001f
 
-//#define KNOWN_SERVER {0x2C, 0xCF, 0x67, 0x98, 0x8E, 0xDF} // Main Reel Test Pico
-#define KNOWN_SERVER {0x28, 0xCD, 0xC1, 0x10, 0xA5, 0x24} // Headerless Pico 1
+#define KNOWN_SERVER {0x2C, 0xCF, 0x67, 0x98, 0x8E, 0xDF} // Main Reel Test Pico
+//#define KNOWN_SERVER {0x28, 0xCD, 0xC1, 0x10, 0xA5, 0x24} // Headerless Pico 1
 
 
 // Global Variables
@@ -65,6 +65,7 @@ static int num_characteristics = 0;
 
 void subscribe_to_characteristics();
 int characteristic_index = 0;
+volatile int connection_status = 0;
 
 
 // Checks if the advertisement contains the correct service (UNUSED)
@@ -420,6 +421,7 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             if (hci_event_le_meta_get_subevent_code(packet) == HCI_SUBEVENT_LE_CONNECTION_COMPLETE) {
                 uint8_t status = hci_subevent_le_connection_complete_get_status(packet);
                 if (status == 0) {
+                    connection_status = 1;
                     printf("Connection successful!\n");
 
                     connection_handle = hci_subevent_le_connection_complete_get_connection_handle(packet);

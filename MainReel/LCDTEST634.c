@@ -100,12 +100,12 @@ void cfa634_print(const char *text) {
         if (formatted_text[i] >= 32 && formatted_text[i] <= 126) {  // Printable ASCII range
             uint8_t data = (uint8_t)formatted_text[i];
             i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &data, 1, false);
-            sleep_ms(10);  // Stability delay
+            //sleep_ms(10);  // Stability delay
         }
     }
 }
 void i2c_setup() {
-    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
+    i2c_init(I2C_PORT, 400 * 1000);  // Set I2C speed to 100 kHz
     gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(SDA_PIN);

@@ -236,7 +236,7 @@ int main() {
 
     int New_Length = 0; //Change to new line count
     int Old_Length = 0; //Change to Old line count
-    bool reg = false;
+    bool reg = true;
     // Define GPIO pins
     const int B1_PIN = 6;
     const int B2_PIN = 7;

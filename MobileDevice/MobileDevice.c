@@ -201,6 +201,7 @@ float get_battery_voltage() {
  extern volatile uint8_t fish_alarm;
  extern volatile uint8_t auto_stop_length;
  extern volatile uint8_t measurement_system;
+ extern volatile int connection_status;
  //settings_t current_settings;
 
  /*
@@ -357,7 +358,9 @@ float get_battery_voltage() {
          lcd_print_centered(line2, 2);
          lcd_print_centered(line3, 3);
          lcd_send_command(0x80 | 0x60);  // Set cursor to the leftmost position of line 4
-         lcd_send_data(0);               // Print the custom character stored in slot 0
+         if (connection_status == 1) {
+            lcd_send_data(0);               // Print the custom character stored in slot 0
+         }
      } else {
          int remaining = FULL_REEL_LENGTH - stop_length; // Remaining reel length.
          printf("Remaining: %d, FULL_REEL_LENGTH: %d, stop_length: %d\n", remaining, FULL_REEL_LENGTH, stop_length);
@@ -369,7 +372,9 @@ float get_battery_voltage() {
          lcd_print_centered(line2, 2);
          lcd_print_centered(line3, 3);
          lcd_send_command(0x80 | 0x60);  // Set cursor to the leftmost position of line 4
-         lcd_send_data(0);               // Print the custom character stored in slot 0
+         if (connection_status == 1) {
+            lcd_send_data(0);               // Print the custom character stored in slot 0
+         }
      }
      printf("[LCD] Main Screen Displayed.\n");
  }
@@ -969,7 +974,7 @@ void create_bluetooth_char(void) {
      // Set up PWM for Brightness on GPIO 22.
      gpio_set_function(BRIGHTNESS_PWM_PIN, GPIO_FUNC_PWM);
      uint slice_brightness = pwm_gpio_to_slice_num(BRIGHTNESS_PWM_PIN);
-     pwm_set_wrap(slice_brightness, 65535);
+     pwm_set_wrap(slice_brightness, 65535); // Adjusted from 65535 to 5000 for faster refresh
      // Brightness uses the full 0–100% range.
      pwm_set_chan_level(slice_brightness, pwm_gpio_to_channel(BRIGHTNESS_PWM_PIN),
          (uint16_t)((brightness_value / 100.0f) * 65535));
