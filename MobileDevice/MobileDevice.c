@@ -179,7 +179,7 @@ float get_battery_voltage() {
  
  // User-adjustable settings.
  int reel_speed = 50;       // Reel-Up speed (as a percentage, 0–100%) in 10% steps.
- int stop_length = 10;      // Auto stop length in feet (0–100 FT) in 1-ft steps.
+ int stop_length = 0;      // Auto stop length in feet (0–100 FT) in 1-ft steps.
  bool metric_mode = false;  // false for Imperial units, true for Metric.
  bool alarm_enabled = true; // If false, the buzzer is disabled.
  float drag_value = 5.0f;   // Independent drag value (in ft–lbs); later can be updated separately.
