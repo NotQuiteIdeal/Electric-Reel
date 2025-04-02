@@ -202,6 +202,7 @@ float get_battery_voltage() {
  extern volatile uint8_t auto_stop_length;
  extern volatile uint8_t measurement_system;
  extern volatile int connection_status;
+ volatile int fart = 0;
  //settings_t current_settings;
 
  /*
@@ -1090,6 +1091,7 @@ void BT_Core(void) {
          // If not in settings mode, check for a long press to enter settings.
          if (!in_settings_menu) {
              check_button_long_press();
+             if (connection_status == 1 && fart == 0) (display_main_screen(), fart = 1);
              if (FULL_REEL_LENGTH != line_length) {
                 FULL_REEL_LENGTH = line_length;
                 display_main_screen();
