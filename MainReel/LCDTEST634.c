@@ -69,6 +69,16 @@ volatile int last_encoder_B = 0;
 volatile int pulse1=0;
 volatile uint32_t last_interrupt_time = 0;
 
+extern volatile int mobile_motor_control;
+extern uint16_t line_length;
+extern uint16_t drag_set;
+extern uint8_t motor_status;
+extern uint8_t motor_speed;
+extern uint8_t fish_alarm;
+extern uint8_t ping_test_status;
+extern uint8_t measurement_system;
+extern uint8_t auto_stop_length;
+
 // Function to send a command to the LCD
 void cfa634_send_command(uint8_t cmd) {
     uint8_t buffer[1] = {cmd};  // Store the command in a buffer
@@ -321,6 +331,7 @@ void selectedmenudisplay(int pos) {
             sleep_ms(1000); // delay to show message
             in_submenu = false; // this line and next tell to return to main
             in_settings_menu = false;
+
             // set values to update the main screen
             last_linelength = -1;
             last_dragset = -1;
@@ -350,6 +361,7 @@ void selectedmenudisplay(int pos) {
             cfa634_print(display_value);
             setcursor(0, 3);
             cfa634_print("  L > CNCL R > SAVE ");
+            auto_stop_length = AutoStopLen;
             break;
         }
         case 3:
@@ -361,6 +373,7 @@ void selectedmenudisplay(int pos) {
             cfa634_print("   RIGHT > IMPER    ");
             setcursor(0, 3);
             cfa634_print("PRESS DIAL > RETURN ");
+            measurement_system = isImperial;
             break;
         case 4: {
             char display_value1[21];
@@ -612,6 +625,7 @@ void read_btn() {
 
     if (left_state && !last_left_state) {  
         left_pressed = true;  
+        mobile_motor_control = 0;
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
@@ -632,6 +646,7 @@ void read_btn() {
 
     if (right_state && !last_right_state) {  
         right_pressed = true;  
+        mobile_motor_control = 0;
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Save to last variable then exit
@@ -797,6 +812,7 @@ void encoder_isr(uint gpio, uint32_t events) {
     static uint32_t last_interrupt_time = 0;
     static uint8_t last_state = 0b11;
     static int pulse_count = 0;
+    mobile_motor_control = 0;
 
     uint32_t now = to_ms_since_boot(get_absolute_time());
 
@@ -1037,6 +1053,7 @@ void check_encoder() {
 
     if (gpio_get(ENCODER_BTN) == 1) {  // Button is pressed
         if (!button_pressed) {  
+            mobile_motor_control = 0;
             button_pressed = true; 
             button_press_time = time_us_64(); 
         }
@@ -1049,7 +1066,8 @@ void check_encoder() {
             button_was_pressed = true;  
         }
     } else {  // Button is released
-        if (button_pressed) {  
+        if (button_pressed) { 
+            mobile_motor_control = 0; 
             uint32_t press_duration = time_us_64() - button_press_time; 
             if (press_duration < 1000000) {  
                 if (in_settings_menu && !in_submenu) {  
@@ -1113,6 +1131,7 @@ void screen_update(int linelength, int dragset) {
     // In settings mode, check for submenu or main menu
     if (in_settings_menu) {
         if (in_submenu) {
+            mobile_motor_control = 0;
             // Check if any submenu value has changed, then update screen
             if (menuActive) {
                 if (menu_index == 2 && AutoStopLen != last_AutoStopLen) { // Check if AutoStopLen changed
@@ -1151,6 +1170,7 @@ void screen_setup(){
     cfa634_clear_screen();
     cfa634_send_command(0x14);
 }
+/*
 int main() {
     screen_setup();
     int linelength = 0;
@@ -1159,3 +1179,4 @@ int main() {
         screen_update(linelength, dragset);
     }
 }
+    */
