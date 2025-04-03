@@ -74,36 +74,36 @@ int calculate_length(double Dmax, double Dmin, double rotations)
 
 // Update the drag value based on drag count from the encoder
 int update_drag(double count_drag) {
-    if (count_drag <= 10) { //position 1
+    if (count_drag <= 8) { //position 1
         drag = Position[0];
-    } else if (count_drag >= 11 && count_drag <= 10) { //position 2
+    } else if (count_drag >= 9 && count_drag <= 23) { //position 2
         drag = Position[1];
-    } else if (count_drag >= 11 && count_drag <= 15) { //position 2
+    } else if (count_drag >= 24 && count_drag <= 33) { //position 2
         drag = Position[2];
-    } else if (count_drag >= 16 && count_drag <= 20) {
+    } else if (count_drag >= 34 && count_drag <= 46) {
         drag = Position[3];
-    } else if (count_drag >= 21 && count_drag <= 25) {
+    } else if (count_drag >= 47 && count_drag <= 58) {
         drag = Position[4];
-    } else if (count_drag >= 26 && count_drag <= 30) {
+    } else if (count_drag >= 59 && count_drag <= 70) {
         drag = Position[5];
-    } else if (count_drag >= 31 && count_drag <= 35) {
+    } else if (count_drag >= 71 && count_drag <= 84) {
         drag = Position[6];
-    } else if (count_drag >= 36 && count_drag <= 40) {
+    } else if (count_drag >= 85 && count_drag <= 99) {
         drag = Position[7];
-    } else if (count_drag >= 41 && count_drag <= 45) {
+    } else if (count_drag >= 100 && count_drag <= 110) {
         drag = Position[8];
-    } else if (count_drag >= 46 && count_drag <= 50) {
+    } else if (count_drag >= 111 && count_drag <= 124) {
         drag = Position[10];
-    } else if (count_drag >= 51 && count_drag <= 55) {
+    } else if (count_drag >= 125 && count_drag <= 139) {
         drag = Position[11];
-    } else if (count_drag >= 56 && count_drag <= 60) {
+    } else if (count_drag >= 140 && count_drag <= 150) {
         drag = Position[12];
-    } else if (count_drag >= 61 && count_drag <= 65) {
+    } else if (count_drag >= 151 && count_drag <= 165) {
         drag = Position[13];
-    } else if (count_drag >= 66 && count_drag <= 70) {
+    } else if (count_drag >= 166 && count_drag <= 178) {
         drag = Position[14];
-    } else if (count_drag >= 71 && count_drag <= 75) {
-        drag = Position[0];
+    } else if (count_drag >= 179 && count_drag <= 250) {
+        drag = Position[15];
     } 
     return drag; // Return the calculated drag
 }
@@ -125,6 +125,11 @@ uint16_t read_potentiometer() {
 // Function to set PWM duty cycle with limits
 void set_pwm_duty(uint16_t duty_cycle) {
     uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
+
+    // Temporary min/max speed init
+    MinSpeed = 0;
+    MaxSpeed = 100;
+
     min_duty = (MinSpeed * PWM_RESOLUTION) / 100; // Scale to 16-bit
     max_duty = (MaxSpeed * PWM_RESOLUTION) / 100; // Scale to 16-bit
     if (max_duty > 65000) max_duty = 65000; // Ensure max duty cycle does not exceed 100%
@@ -199,17 +204,18 @@ void core1() {
         uint16_t pot_value = read_potentiometer();
         duty_cycle_test = (pot_value * PWM_RESOLUTION) / 4095; // Scale to 16-bit
 
-        if (mobile_motor_control == 0 || duty_cycle_test > 1000 || in_settings_menu == false) { // Tests if reel is control 
+        if (mobile_motor_control == 0 || duty_cycle_test > 1000 || in_settings_menu == true) { // Tests if reel is control 
             duty_cycle = duty_cycle_test;
         } else {
             duty_cycle = (motor_speed * PWM_RESOLUTION) / 100; // Scale to 16-bit
         }
         // Apply limits
         set_pwm_duty(duty_cycle);
+        //printf("Pot Value: %u, Duty Cycle: %u\n", pot_value, duty_cycle);
 
         // Print values
-        //float voltage = pot_value * (3.3f / 4095.0f);
-        //float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
+        float voltage = pot_value * (3.3f / 4095.0f);
+        float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
         //printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
 
         // Example: Dynamically update limits (could be triggered by a button/UART)
@@ -265,6 +271,10 @@ int main() {
     int buttonPressed = 0;
     int button = 0;
     int reg_count = 0;
+
+    int alarm_sensitivity = 1; // Length in units to trigger the alarm
+    int alarm_progress = 0; // Progress towards the alarm trigger
+    int alarm_trigger = 0; // Holds value of length when sensitivity is tested
 
     while (true) {
         /*if (gpio_get(15) == 1){ // If button is pressed, reset drag count
@@ -359,6 +369,7 @@ int main() {
          }
          oldVal = newVal;
         New_Length = line_length;
+        //printf("Line Length: %d\n", line_length);
 
         // Update drag count based on encoder
          if (newValdrag != oldValdrag) {
@@ -422,13 +433,16 @@ int main() {
         }
         // Buzzer Logic
         if (reg && drag != 0 && New_Length > Old_Length) {
-            fish_alarm = 1;
+            if (alarm_trigger == 0) alarm_trigger = Old_Length;
+            if (New_Length - alarm_trigger >= alarm_sensitivity) fish_alarm = 1;
+            //fish_alarm = 1; RE-ENABLE TO REMOVE ALARM SENSITIVITY
             //printf("Fish alarm on!\n");
         } else if (reg && drag != 0 && New_Length == Old_Length && fish_alarm == 1) {
             fish_alarm = 1;
             //rintf("Fish alarm still on!\n");
         } else {
             fish_alarm = 0;
+            alarm_trigger = 0; // Reset the alarm trigger when reel is engaged or drag is 0
         }
         gpio_put(BUZZER_PIN, fish_alarm);
      } 
