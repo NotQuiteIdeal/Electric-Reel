@@ -55,7 +55,7 @@ volatile uint16_t max_duty = 65000; // 95% duty cycle
 
 volatile int length = 0; 
 volatile int drag = 0;
-volatile int Position[15] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75};
+volatile int Position[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80};
 int count = 0;
 int rotations = 0;
 int count_drag = 0;
@@ -124,21 +124,31 @@ uint16_t read_potentiometer() {
 
 // Function to set PWM duty cycle with limits
 void set_pwm_duty(uint16_t duty_cycle) {
-    uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
-
+    int activation_threshold = 5;
     // Temporary min/max speed init
-    MinSpeed = 0;
+    MinSpeed = 5;
     MaxSpeed = 100;
+
+    uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
+    uint16_t adc_threshold = (MinSpeed * PWM_RESOLUTION) / 100; // 5% of max duty cycle as threshold 
+
+    if (duty_cycle < adc_threshold) {
+        pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), 0);
+        return;
+    }
 
     min_duty = (MinSpeed * PWM_RESOLUTION) / 100; // Scale to 16-bit
     max_duty = (MaxSpeed * PWM_RESOLUTION) / 100; // Scale to 16-bit
-    if (max_duty > 65000) max_duty = 65000; // Ensure max duty cycle does not exceed 100%
 
-    // Constrain duty cycle within min and max limits
-    if (duty_cycle < min_duty) duty_cycle = min_duty;
-    if (duty_cycle > max_duty) duty_cycle = max_duty;
+    float scaled = (float)(duty_cycle - adc_threshold) / (PWM_RESOLUTION - adc_threshold);
+    if (scaled > 1.0f) scaled = 1.0f;
 
-    pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), duty_cycle);
+    uint16_t output_duty = min_duty + (uint16_t)(scaled * (max_duty - min_duty));
+    if (output_duty > 65000) output_duty = 65000;
+
+    printf( "Setting PWM Duty Cycle: %u (scaled from %u)\n", output_duty, duty_cycle);
+
+    pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), output_duty);
 }
 
 // Function to update min/max limits dynamically
@@ -216,7 +226,7 @@ void core1() {
         // Print values
         float voltage = pot_value * (3.3f / 4095.0f);
         float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
-        //printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
+        printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
 
         // Example: Dynamically update limits (could be triggered by a button/UART)
         // Uncomment this line to change limits dynamically during execution
@@ -285,8 +295,8 @@ int main() {
         //printf("%d\n", count_drag);
         int chanA = gpio_get(10); // Read encoder channels for rotation count
         int chanB = gpio_get(11);
-        int chanDragA = gpio_get(14); // Read encoder channels for drag count
-        int chanDragB = gpio_get(15);
+        int chanDragA = gpio_get(8); // Read encoder channels for drag count
+        int chanDragB = gpio_get(9);
 
         // Update rotation count based on encoder signals
         if (chanA == 1) {
@@ -319,6 +329,7 @@ int main() {
         }
         Old_Length = line_length;
         // Update rotation count and calculate line length
+        //printf("New Encoder Value: %d, Old Value: %d\n", newVal, oldVal);
         if (newVal != oldVal) { 
              if (oldVal == 11) {
                  if (newVal == 10) {
@@ -370,7 +381,8 @@ int main() {
          oldVal = newVal;
         New_Length = line_length;
         //printf("Line Length: %d\n", line_length);
-
+        //printf("Count: %d, Rotations: %d, Length: %d\n", count, rotations, length);
+        
         // Update drag count based on encoder
          if (newValdrag != oldValdrag) {
             if (oldValdrag == 11) {
@@ -409,11 +421,11 @@ int main() {
             if (count_drag >=1) {
                 drag =  update_drag(count_drag);
                 drag_set = drag;
-                printf("%d\n", drag);
-                
-                
+                //printf("%d\n", drag);
             }
+            
         }
+        //printf("Drag Count: %d, Drag Value: %d\n", count_drag, drag);
         //update_drag();
         oldValdrag = newValdrag;
          //Clears queue and updates length value for core1    

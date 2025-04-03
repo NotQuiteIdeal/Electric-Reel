@@ -35,7 +35,7 @@ volatile bool in_submenu = false; // stores if in submen
 volatile int selected_digit = 1; // which digit the cursors is on
 volatile bool isImperial = true; //false = metric, true = imperial
 volatile int AutoStopLen = 0;     // Store value for setting
-volatile int MaxSpeed = 0;        // Store value for setting
+volatile int MaxSpeed = 100;        // Store value for setting
 volatile int MinSpeed = 0;        // Store value for setting
 volatile int SpoolDiameter = 0;   // Store value for setting
 volatile int selected_menu = 0; // which menu_index is selected
@@ -48,7 +48,7 @@ volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
 volatile int last_AutoStopLen = 20;
-volatile int last_MaxSpeed = 70;
+volatile int last_MaxSpeed = 100;
 volatile int last_MinSpeed = 10;
 volatile int last_SpoolDiameter = 20;
 volatile double SDia = 0.0;
@@ -68,6 +68,8 @@ volatile int last_encoder_A = 0;
 volatile int last_encoder_B = 0;
 volatile int pulse1=0;
 volatile uint32_t last_interrupt_time = 0;
+
+extern int mobile_motor_control;
 
 // Function to send a command to the LCD
 void cfa634_send_command(uint8_t cmd) {
@@ -600,6 +602,7 @@ void read_btn() {
 
     if (left_state && !last_left_state) {  
         left_pressed = true;  
+        mobile_motor_control = 0;
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
@@ -620,6 +623,7 @@ void read_btn() {
 
     if (right_state && !last_right_state) {  
         right_pressed = true;  
+        mobile_motor_control = 0;
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Save to last variable then exit
@@ -785,6 +789,8 @@ void encoder_isr(uint gpio, uint32_t events) {
     static uint32_t last_interrupt_time = 0;
     static uint8_t last_state = 0b11;
     static int pulse_count = 0;
+
+    mobile_motor_control;
 
     uint32_t now = to_ms_since_boot(get_absolute_time());
 
@@ -1022,6 +1028,7 @@ void check_encoder() {
     static bool button_pressed = false; 
 
     if (gpio_get(ENCODER_BTN) == 1) {  // Button is pressed
+        mobile_motor_control = 0;
         if (!button_pressed) {  
             button_pressed = true; 
             button_press_time = time_us_64(); 
@@ -1137,6 +1144,7 @@ void screen_setup(){
     cfa634_clear_screen();
     cfa634_send_command(0x14);
 }
+/*
 int main() {
     screen_setup();
     int linelength = 0;
@@ -1145,3 +1153,4 @@ int main() {
         screen_update(linelength, dragset);
     }
 }
+    */
