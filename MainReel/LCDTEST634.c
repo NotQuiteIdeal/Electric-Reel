@@ -11,13 +11,13 @@
 #define SCL_PIN 5 // i2c clock
 #define CFA634_I2C_ADDR 0x42  // I2C address (7-bit format)
 #define MAX_LINE_LENGTH 20  // Max characters per line
-#define ENCODER_A 1 // encoder a side
-#define ENCODER_B 0 // encoder b side
+#define ENCODER_A 0 // encoder a side
+#define ENCODER_B 1 // encoder b side
 #define ENCODER_BTN 2 // encoder button
 #define RBTN 6 // right button
 #define LBTN 7 // left button
 #define PULSES_PER_UPDATE 2  // Update after every 4 pulses
-#define DEBOUNCE_TIME_MS 25     // Short pause to allow proper pulse registration (in milliseconds)
+#define DEBOUNCE_TIME_MS 35     // Short pause to allow proper pulse registration (in milliseconds)
  // Store previous values for menus
 volatile int last_linelength = -1;// used to detremine if to update display
 volatile int last_dragset = -1;// used to detremine if to update display
@@ -35,7 +35,7 @@ volatile bool in_submenu = false; // stores if in submen
 volatile int selected_digit = 1; // which digit the cursors is on
 volatile bool isImperial = true; //false = metric, true = imperial
 volatile int AutoStopLen = 0;     // Store value for setting
-volatile int MaxSpeed = 100;        // Store value for setting
+volatile int MaxSpeed = 0;        // Store value for setting
 volatile int MinSpeed = 0;        // Store value for setting
 volatile int SpoolDiameter = 0;   // Store value for setting
 volatile int selected_menu = 0; // which menu_index is selected
@@ -48,8 +48,8 @@ volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
 volatile int last_AutoStopLen = 20;
-volatile int last_MaxSpeed = 100;
-volatile int last_MinSpeed = 0;
+volatile int last_MaxSpeed = 70;
+volatile int last_MinSpeed = 10;
 volatile int last_SpoolDiameter = 20;
 volatile double SDia = 0.0;
 volatile bool update_screen = false;
@@ -66,8 +66,8 @@ static uint32_t last_read_time = 0;
 const uint32_t debounce_delay = 50;
 volatile int last_encoder_A = 0;
 volatile int last_encoder_B = 0;
-
-extern volatile int mobile_motor_control; // 0 is no, 1 is yes
+volatile int pulse1=0;
+volatile uint32_t last_interrupt_time = 0;
 
 // Function to send a command to the LCD
 void cfa634_send_command(uint8_t cmd) {
@@ -100,12 +100,12 @@ void cfa634_print(const char *text) {
         if (formatted_text[i] >= 32 && formatted_text[i] <= 126) {  // Printable ASCII range
             uint8_t data = (uint8_t)formatted_text[i];
             i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &data, 1, false);
-            //sleep_ms(10);  // Stability delay
+            sleep_ms(10);  // Stability delay
         }
     }
 }
 void i2c_setup() {
-    i2c_init(I2C_PORT, 400 * 1000);  // Set I2C speed to 100 kHz
+    i2c_init(I2C_PORT, 100 * 1000);  // Set I2C speed to 100 kHz
     gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(SDA_PIN);
@@ -600,7 +600,6 @@ void read_btn() {
 
     if (left_state && !last_left_state) {  
         left_pressed = true;  
-        mobile_motor_control = 0; // Set to 0 when left button is pressed
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
@@ -620,8 +619,7 @@ void read_btn() {
     }
 
     if (right_state && !last_right_state) {  
-        right_pressed = true; 
-        mobile_motor_control = 0; // Set to 0 when right button is pressed 
+        right_pressed = true;  
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Save to last variable then exit
@@ -652,6 +650,7 @@ void read_btn() {
     last_right_state = right_state;  
 }
 // Function to handle  value update in submenu
+/*
 void encoder_isr(uint gpio, uint32_t events) {
     static uint32_t last_update = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
@@ -669,7 +668,6 @@ void encoder_isr(uint gpio, uint32_t events) {
 
     // Detect pulse only when A or B changes
     if ((A != last_A) || (B != last_B)) {  
-        mobile_motor_control = 0; // Set to 0 when encoder is touched
         if (A == last_B) {  // Clockwise direction (A follows B)
             pulse_count++;
         } else {  // Counterclockwise direction (B follows A)
@@ -677,7 +675,7 @@ void encoder_isr(uint gpio, uint32_t events) {
         }
 
         // Update menu and position variables every 3 pulses
-        if (pulse_count >= 4) {  
+        if (pulse_count >= 5) {  
             if (in_submenu) {
                 if (menu_index == 2 && AutoStopLen < 99) {
                     AutoStopLen = last_AutoStopLen;
@@ -720,13 +718,13 @@ void encoder_isr(uint gpio, uint32_t events) {
                 }
                 menuActive = true;
             } else {
-                menu_index = (menu_index < 7) ? menu_index + 1 : 7;
+                menu_index = (menu_index < 8) ? menu_index + 1 : 7;
                 update_screen = true;
             }
             printf("Menu Index Incremented: %d | Position1: %d\n", menu_index, Position1);
             pulse_count = 0;  // Reset counter after update
         } 
-        else if (pulse_count <= -3) {  
+        else if (pulse_count <= -2) {  
             if (in_submenu) {
                 if (menu_index == 2 && AutoStopLen > 0) {
                     AutoStopLen = last_AutoStopLen;
@@ -769,7 +767,7 @@ void encoder_isr(uint gpio, uint32_t events) {
                 }
                 menuActive = true;
             } else {
-                menu_index = (menu_index > 0) ? menu_index - 1 : 0;
+                menu_index = (menu_index > -1) ? menu_index - 1 : 0;
                 update_screen = true;
             }
 
@@ -781,7 +779,242 @@ void encoder_isr(uint gpio, uint32_t events) {
 
     last_A = A;
     last_B = B;
+} */
+///*
+void encoder_isr(uint gpio, uint32_t events) {
+    static uint32_t last_interrupt_time = 0;
+    static uint8_t last_state = 0b11;
+    static int pulse_count = 0;
+
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    // **Debounce filtering**
+    if (now - last_interrupt_time < 15) return;
+    last_interrupt_time = now;
+
+    // **Read encoder state**
+    int a = gpio_get(ENCODER_A);
+    int b = gpio_get(ENCODER_B);
+    uint8_t state = (a << 1) | b;
+
+    // **Ignore duplicate readings**
+    if (state == last_state) return;
+
+    // **Process transitions correctly**
+    if ((state == 0b10 && last_state == 0b11) ||  
+        (state == 0b00 && last_state == 0b10) ||  
+        (state == 0b01 && last_state == 0b00) ||  
+        (state == 0b11 && last_state == 0b01)) {  
+        pulse_count++;
+        printf("[CW] Pulse Incremented. Count: %d\n", pulse_count);
+    }
+    else if ((state == 0b01 && last_state == 0b11) ||  
+             (state == 0b00 && last_state == 0b01) ||  
+             (state == 0b10 && last_state == 0b00) ||  
+             (state == 0b11 && last_state == 0b10)) {  
+        pulse_count--;
+        printf("[CCW] Pulse Decremented. Count: %d\n", pulse_count);
+    }
+
+    last_state = state;  // **Update last state for next ISR call**
+
+    // **Update menu index when threshold is reached**
+    if (!in_submenu && in_settings_menu) {
+        if (pulse_count >= 4) {
+            menu_index = (menu_index < 7) ? menu_index + 1 : 7;
+            printf("[CW] Menu Index: %d\n", menu_index);
+            pulse_count = 0;
+            update_screen = true;
+        } 
+        else if (pulse_count <= -3) {
+            menu_index = (menu_index > 0) ? menu_index - 1 : 0;
+            printf("[CCW] Menu Index: %d\n", menu_index);
+            pulse_count = 0;
+            update_screen = true;
+        }
+    } else if(in_submenu){
+        if (pulse_count >=3) {
+            if (menu_index == 2 && AutoStopLen < 99) {
+                AutoStopLen = last_AutoStopLen;
+                AutoStopLen++;
+            } else if (menu_index == 4 && MaxSpeed < 100) {
+                MaxSpeed = last_MaxSpeed;
+                MaxSpeed += 10;
+            } else if (menu_index == 5 && MinSpeed < 45) {
+                MinSpeed = last_MinSpeed;
+                MinSpeed += 10;
+            } else if (menu_index == 6 && SpoolDiameter < 99) {
+                SpoolDiameter = last_SpoolDiameter;
+                SpoolDiameter++;
+            } else if (menu_index == 7) {
+                // Update only the variable corresponding to Position1
+                for (int i = 1; i < 15; i++) {
+                    Position2[i] = lastPosition2[i];  // Copy each element individually
+                } // this helps to save the value so it doesnt restart from zero
+                if (Position1 == 1 && Position2[1] < 99) Position2[1]++;
+                if (Position1 == 2 && Position2[2] < 99) Position2[2]++;
+                if (Position1 == 3 && Position2[3] < 99) Position2[3]++;
+                if (Position1 == 4 && Position2[4] < 99) Position2[4]++;
+                if (Position1 == 5 && Position2[5] < 99) Position2[5]++;
+                if (Position1 == 6 && Position2[6] < 99) Position2[6]++;
+                if (Position1 == 7 && Position2[7] < 99) Position2[7]++;
+                if (Position1 == 8 && Position2[8] < 99) Position2[8]++;
+                if (Position1 == 9 && Position2[9] < 99) Position2[9]++;
+                if (Position1 == 10 && Position2[10] < 99) Position2[10]++;
+                if (Position1 == 11 && Position2[11] < 99) Position2[11]++;
+                if (Position1 == 12 && Position2[12] < 99) Position2[12]++;
+                if (Position1 == 13 && Position2[13] < 99) Position2[13]++;
+                if (Position1 == 14 && Position2[14] < 99) Position2[14]++;
+                for (int i = 1; i < 15; i++) {
+                    lastPosition2[i] = Position2[i];  // Copy each element individually
+                }
+            }
+            menuActive = true;
+            update_screen = true;
+            pulse_count = 0;
+        } else if (pulse_count <= -2) {
+            if (menu_index == 2 && AutoStopLen > 0) {
+                AutoStopLen = last_AutoStopLen;
+                AutoStopLen--;
+            } else if (menu_index == 4 && MaxSpeed > 45) {
+                MaxSpeed = last_MaxSpeed;
+                MaxSpeed -= 10;
+            } else if (menu_index == 5 && MinSpeed > 0) {
+                MinSpeed = last_MinSpeed;
+                MinSpeed -= 10;
+            } else if (menu_index == 6 && SpoolDiameter > 0) {
+                SpoolDiameter = last_SpoolDiameter;
+                SpoolDiameter--;
+            } else if (menu_index == 7) {
+                // Update only the variable corresponding to Position1
+                for (int i = 1; i < 15; i++) {
+                    Position2[i] = lastPosition2[i];  // Copy each element individually
+                } // this helps to save the value so it doesnt restart from zero
+                if (Position1 == 1 && Position2[1] < 99) Position2[1]--;
+                if (Position1 == 2 && Position2[2] < 99) Position2[2]--;
+                if (Position1 == 3 && Position2[3] < 99) Position2[3]--;
+                if (Position1 == 4 && Position2[4] < 99) Position2[4]--;
+                if (Position1 == 5 && Position2[5] < 99) Position2[5]--;
+                if (Position1 == 6 && Position2[6] < 99) Position2[6]--;
+                if (Position1 == 7 && Position2[7] < 99) Position2[7]--;
+                if (Position1 == 8 && Position2[8] < 99) Position2[8]--;
+                if (Position1 == 9 && Position2[9] < 99) Position2[9]--;
+                if (Position1 == 10 && Position2[10] < 99) Position2[10]--;
+                if (Position1 == 11 && Position2[11] < 99) Position2[11]--;
+                if (Position1 == 12 && Position2[12] < 99) Position2[12]--;
+                if (Position1 == 13 && Position2[13] < 99) Position2[13]--;
+                if (Position1 == 14 && Position2[14] < 99) Position2[14]--;
+                for (int i = 1; i < 15; i++) {
+                    lastPosition2[i] = Position2[i];  // Copy each element individually
+                }
+            }
+            menuActive = true;
+            update_screen = true;
+            pulse_count = 0;
+        }
+    }
 }
+
+//*/
+/*
+void encoder_isr(uint gpio, uint32_t events) {
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+
+    // Basic debounce check (10ms)
+    if (current_time - last_interrupt_time < 10) return;
+    last_interrupt_time = current_time;
+
+    int a = gpio_get(ENCODER_A);
+    int b = gpio_get(ENCODER_B);
+
+    static int pulse_count = 0;  // Track pulses for smoother steps
+    bool rotatedCW = false;
+    bool rotatedCCW = false;
+
+    if (a == 0) { // Falling edge of ENC_A
+        // Only handle this when `A` falls, to prevent reading multiple pulses
+        if (b == 1) {
+            pulse_count--;  // Counterclockwise (CCW)
+            rotatedCCW = true;
+        } else if( b == 0) {
+            pulse_count++;  // Clockwise (CW)
+            rotatedCW = true;
+        }
+
+        // Debug output for pulse count and rotation direction
+        printf("Rotated %s: Pulse Count = %d\n", rotatedCW ? "CW" : "CCW", pulse_count);
+
+        // Menu Navigation (Threshold = 8)
+        if (!in_submenu) {
+            if (pulse_count >= 6) {
+                if (menu_index < 7) menu_index++;
+                update_screen = true;
+                pulse_count = 0;
+                printf("Menu Index Incremented: %d\n", menu_index);
+            } 
+            else if (pulse_count <= -4) {
+                if (menu_index > 0) menu_index--;
+                update_screen = true;
+                pulse_count = 0;
+                printf("Menu Index Decremented: %d\n", menu_index);
+            }
+        } 
+        else {
+            // Submenu Adjustments (Threshold = 3)
+            if (pulse_count >= 3 || pulse_count <= -3) {
+                int adjustment = (pulse_count >= 3) ? 1 : -1;
+                pulse_count = 0;
+
+                // Determine increment based on selected digit
+                int increment = (selected_digit == 1) ? 1 : 10;
+                adjustment *= increment;
+
+                // Adjust the values in submenu
+                if (menu_index == 2) {
+                    if (AutoStopLen + adjustment >= 0 && AutoStopLen + adjustment <= 99) {
+                        AutoStopLen += adjustment;
+                        printf("AutoStopLen = %d\n", AutoStopLen);
+                    }
+                } 
+                else if (menu_index == 4) {
+                    if (MaxSpeed + adjustment >= 45 && MaxSpeed + adjustment <= 100) {
+                        MaxSpeed += adjustment;
+                        printf("MaxSpeed = %d\n", MaxSpeed);
+                    }
+                } 
+                else if (menu_index == 5) {
+                    if (MinSpeed + adjustment >= 0 && MinSpeed + adjustment <= 45) {
+                        MinSpeed += adjustment;
+                        printf("MinSpeed = %d\n", MinSpeed);
+                    }
+                } 
+                else if (menu_index == 6) {
+                    if (SpoolDiameter + adjustment >= 0 && SpoolDiameter + adjustment <= 99) {
+                        SpoolDiameter += adjustment;
+                        printf("SpoolDiameter = %d\n", SpoolDiameter);
+                    }
+                } 
+                else if (menu_index == 7) {
+                    for (int i = 1; i < 15; i++) Position2[i] = lastPosition2[i];
+
+                    if (Position1 >= 1 && Position1 <= 14) {
+                        if (Position2[Position1] + adjustment >= 0 && Position2[Position1] + adjustment <= 99) {
+                            Position2[Position1] += adjustment;
+                            printf("Position2[%d] = %d\n", Position1, Position2[Position1]);
+                        }
+                    }
+
+                    for (int i = 1; i < 15; i++) lastPosition2[i] = Position2[i];
+                }
+
+                update_screen = true;
+            }
+        }
+    }
+}*/
+
+
+
 // Function to check the state of the encoder button and handle button presses
 void check_encoder() {
     static bool button_was_pressed = false; 
@@ -803,7 +1036,7 @@ void check_encoder() {
         }
     } else {  // Button is released
         if (button_pressed) {  
-            uint32_t press_duration = time_us_32() - button_press_time; 
+            uint32_t press_duration = time_us_64() - button_press_time; 
             if (press_duration < 1000000) {  
                 if (in_settings_menu && !in_submenu) {  
                     selected_menu = menu_index;  
@@ -840,8 +1073,8 @@ void gpio_setup() {
     gpio_init(ENCODER_BTN);
     gpio_set_dir(ENCODER_BTN, GPIO_IN);
     gpio_pull_down(ENCODER_BTN); // pull-down for encoder button
-    gpio_set_irq_enabled_with_callback(ENCODER_A, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &encoder_isr);
-    gpio_set_irq_enabled(ENCODER_B, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled_with_callback(ENCODER_A, GPIO_IRQ_EDGE_RISE, true, &encoder_isr);
+    gpio_set_irq_enabled(ENCODER_B, GPIO_IRQ_EDGE_RISE, true);
     // Button Reading Left Then Right
     gpio_init(LBTN);
     gpio_set_dir(LBTN, GPIO_IN);
@@ -904,8 +1137,6 @@ void screen_setup(){
     cfa634_clear_screen();
     cfa634_send_command(0x14);
 }
-
-/*
 int main() {
     screen_setup();
     int linelength = 0;
@@ -913,4 +1144,4 @@ int main() {
     while (1) {
         screen_update(linelength, dragset);
     }
-} */
+}
