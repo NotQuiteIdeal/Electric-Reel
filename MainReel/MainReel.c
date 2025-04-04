@@ -47,7 +47,7 @@ extern volatile int send_update_flag;
 extern volatile bool in_settings_menu;
 extern volatile int MaxSpeed;
 extern volatile int MinSpeed;
-
+extern volatile int Position2[16];
 
 // Define min and max duty cycle limits (default values)
 volatile uint16_t min_duty = 0; // 0% duty cycle
@@ -55,7 +55,7 @@ volatile uint16_t max_duty = 65000; // 95% duty cycle
 
 volatile int length = 0; 
 volatile int drag = 0;
-volatile int Position[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80};
+//volatile int Position[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80};
 int count = 0;
 int rotations = 0;
 int count_drag = 0;
@@ -75,35 +75,35 @@ int calculate_length(double Dmax, double Dmin, double rotations)
 // Update the drag value based on drag count from the encoder
 int update_drag(double count_drag) {
     if (count_drag <= 8) { //position 1
-        drag = Position[0];
+        drag = Position2[0];
     } else if (count_drag >= 9 && count_drag <= 23) { //position 2
-        drag = Position[1];
+        drag = Position2[1];
     } else if (count_drag >= 24 && count_drag <= 33) { //position 2
-        drag = Position[2];
+        drag = Position2[2];
     } else if (count_drag >= 34 && count_drag <= 46) {
-        drag = Position[3];
+        drag = Position2[3];
     } else if (count_drag >= 47 && count_drag <= 58) {
-        drag = Position[4];
+        drag = Position2[4];
     } else if (count_drag >= 59 && count_drag <= 70) {
-        drag = Position[5];
+        drag = Position2[5];
     } else if (count_drag >= 71 && count_drag <= 84) {
-        drag = Position[6];
+        drag = Position2[6];
     } else if (count_drag >= 85 && count_drag <= 99) {
-        drag = Position[7];
+        drag = Position2[7];
     } else if (count_drag >= 100 && count_drag <= 110) {
-        drag = Position[8];
+        drag = Position2[8];
     } else if (count_drag >= 111 && count_drag <= 124) {
-        drag = Position[10];
+        drag = Position2[10];
     } else if (count_drag >= 125 && count_drag <= 139) {
-        drag = Position[11];
+        drag = Position2[11];
     } else if (count_drag >= 140 && count_drag <= 150) {
-        drag = Position[12];
+        drag = Position2[12];
     } else if (count_drag >= 151 && count_drag <= 165) {
-        drag = Position[13];
+        drag = Position2[13];
     } else if (count_drag >= 166 && count_drag <= 178) {
-        drag = Position[14];
+        drag = Position2[14];
     } else if (count_drag >= 179 && count_drag <= 250) {
-        drag = Position[15];
+        drag = Position2[15];
     } 
     return drag; // Return the calculated drag
 }
@@ -362,11 +362,11 @@ int main() {
                      count++;
                  }
              } 
-             if (count==208){
+             if (count==1058){
                  rotations++;
                  count = 0; 
              }
-             if (count == -208){  
+             if (count == -1058){  
                  --rotations;
                  count = 0;        
              }

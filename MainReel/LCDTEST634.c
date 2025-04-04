@@ -6,6 +6,7 @@
 #include "hardware/gpio.h"
 #include "pico/multicore.h"
 #include "pico/time.h"
+#include <math.h>
 #define I2C_PORT i2c0
 #define SDA_PIN 4 // i2c data
 #define SCL_PIN 5 // i2c clock
@@ -14,8 +15,8 @@
 #define ENCODER_A 0 // encoder a side
 #define ENCODER_B 1 // encoder b side
 #define ENCODER_BTN 2 // encoder button
-#define RBTN 6 // right button
-#define LBTN 7 // left button
+#define RBTN 7 // right button
+#define LBTN 6 // left button
 #define PULSES_PER_UPDATE 2  // Update after every 4 pulses
 #define DEBOUNCE_TIME_MS 35     // Short pause to allow proper pulse registration (in milliseconds)
  // Store previous values for menus
@@ -41,24 +42,26 @@ volatile int SpoolDiameter = 0;   // Store value for setting
 volatile int selected_menu = 0; // which menu_index is selected
 volatile bool right_pressed = false; // store if right button is pressed
 volatile bool left_pressed = false; // store if left button is pressed
+volatile double uplinecon = 0; // value used for conversion
+volatile double updragcon = 0; // value used for conversion
 volatile int linecon = 0; // value used for conversion
 volatile int dragcon = 0; // value used for conversion
 volatile bool encoder_btpress = false; // store if encoder is pressed
 volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
-volatile int last_AutoStopLen = 20;
+volatile int last_AutoStopLen = 20; // previous value next 4
 volatile int last_MaxSpeed = 70;
 volatile int last_MinSpeed = 10;
 volatile int last_SpoolDiameter = 20;
-volatile double SDia = 0.0;
-volatile bool update_screen = false;
+volatile double SDia = 0.0; // used for calculating spool diameter to decimal to 1
+volatile bool update_screen = false; // flag to determine to update screen
 volatile int LineLength = 0;
-volatile int Position1 = 1;
-volatile bool Pos0 = false;
-volatile int Position2[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-volatile int lastPosition2[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80};
-volatile bool DragNext = false;
+volatile int Position1 = 1; // position for sorting through recal drag
+volatile bool Pos0 = false; // flag to tell to go to recal drag call function
+volatile int Position2[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80}; // drag recalibration and display
+volatile int lastPosition2[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80}; // drag recalibration 
+volatile bool DragNext = false; // flag to determine to go to next drag
 //leave alone
 static int encoder_value = 0;
 static uint32_t last_state = 0;
@@ -83,12 +86,7 @@ extern uint8_t auto_stop_length;
 void cfa634_send_command(uint8_t cmd) {
     uint8_t buffer[1] = {cmd};  // Store the command in a buffer
     int ret = i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, buffer, sizeof(buffer), false);
-    /*
-    if (ret < 0) {
-        printf("Error sending command: 0x%02X\n", cmd);
-    }
-    */
-    sleep_ms(50);
+    sleep_ms(25);
 }
 void setcursor(uint8_t col, uint8_t row) {
     if (row > 3) row = 3;  // Ensure row is within bounds
@@ -110,7 +108,7 @@ void cfa634_print(const char *text) {
         if (formatted_text[i] >= 32 && formatted_text[i] <= 126) {  // Printable ASCII range
             uint8_t data = (uint8_t)formatted_text[i];
             i2c_write_blocking(I2C_PORT, CFA634_I2C_ADDR, &data, 1, false);
-            sleep_ms(10);  // Stability delay
+            //sleep_ms(10);  // Stability delay
         }
     }
 }
@@ -127,6 +125,7 @@ void cfa634_clear_screen() {
     sleep_ms(3);
 }
 // End of Screen Set up
+// Function called to allow for the user to recalibrate Drag
 void RecalibrateDrag(int Position){
     printf("this is position initial value: %d", Position);
     if (Pos0){
@@ -317,6 +316,7 @@ void RecalibrateDrag(int Position){
         }
     }
 }
+// Function called to see the submenus
 void selectedmenudisplay(int pos) {
     switch (pos) {
         case 0:
@@ -434,6 +434,7 @@ void selectedmenudisplay(int pos) {
             break;
     }
 }
+// Function called to see the settings list
 void settingsdisplay(int pos){
     //sleep_ms(25);
     switch (pos) {
@@ -565,53 +566,29 @@ void cfa634_main(int line, int drag) {
         cfa634_print("                    "); // Empty line for spacing
     } else if (!isImperial) { // If the current measurement system is metric
         // Convert line and drag to metric units
-        linecon = line * 0.3048; // Convert feet to meters
-        dragcon = drag * 1.3558179483; // Convert foot-pounds to newton-meters
-
+        uplinecon = line * 0.3048; // Convert feet to meters
+        updragcon = drag * 1.3558179483; // Convert foot-pounds to newton-meters
+        linecon = (int)round(uplinecon);
+        dragcon = (int)round(updragcon);
         //cfa634_clear_screen(); // Clear the display
         setcursor(0, 0);
         cfa634_print("       MAIN         "); // Display "MAIN" on the first line
-
         // Format and display the line length in meters
         setcursor(0, 1);
-        if (line < 10) { // If line is a single digit
-            char formattedline[20];
-            sprintf(formattedline, "   LINE: 000%d M     ", linecon);
-            cfa634_print(formattedline);
-        } else if (line < 100) { // If line is two digits
-            char formattedline[20];
-            sprintf(formattedline, "   LINE: 00%d M     ", linecon);
-            cfa634_print(formattedline);
-        } else if (line < 1000) { // If line is three digits
-            char formattedline[20];
-            sprintf(formattedline, "   LINE: 0%d M     ", linecon);
-            cfa634_print(formattedline);
-        } else { // If line is four digits or more
-            char formattedline[20];
-            sprintf(formattedline, "   LINE: %d M     ", linecon);
-            cfa634_print(formattedline);
-        }
-
+        char formattedline[21];
+        sprintf(formattedline, "   LINE: %04d M     ", linecon); 
+        cfa634_print(formattedline);        // Display Line value from 0-9999 in meters
         // Format and display the drag in newton-meters
         setcursor(0, 2);
-        if (drag < 10) { // If drag is a single digit
-            char formatteddrag[20];
-            sprintf(formatteddrag, "   DRAG: 00%d NM     ", dragcon);
-            cfa634_print(formatteddrag);
-        } else if (drag < 100) { // If drag is two digits
-            char formatteddrag[20];
-            sprintf(formatteddrag, "   DRAG: 0%d NM     ", dragcon);
-            cfa634_print(formatteddrag);
-        } else { // If drag is three digits or more
-            char formatteddrag[20];
-            sprintf(formatteddrag, "   DRAG: %d NM     ", dragcon);
-            cfa634_print(formatteddrag);
-        }
+        char formatteddrag[21];
+        sprintf(formatteddrag, "   DRAG: %03d NM     ", dragcon); 
+        cfa634_print(formatteddrag);        // Display Drag value from 0-999 in newton-meters
         setcursor(0, 3);
         cfa634_print("                    "); // Empty line for spacing
+        //printf("Line %d and Linecon %.2f\n", line, uplinecon);
+
     }
 }
-// Function to set the state of the buzzer
 // Function to read the state of the left and right buttons
 void read_btn() {
     static bool last_left_state = false;  
@@ -633,9 +610,9 @@ void read_btn() {
             if (menu_index == 5) MinSpeed = last_MinSpeed;
             if (menu_index == 6) SpoolDiameter = last_SpoolDiameter;
             in_submenu = false;  
-            settingsdisplay(menu_index);  // Exit submenu without saving
+            settingsdisplay(menu_index);  // Exit submenu with saving
         } else if (menu_index == 3) {  
-            isImperial = false;  
+            isImperial = false;  // change to metric
         } else if (menu_index == 7){
             Pos0 = true;
             Position1 = 1;
@@ -660,11 +637,11 @@ void read_btn() {
             isImperial = true;  
         } else if (menu_index == 7){
             if (Pos0 == true) {
-                if ((Position1) < 14){
+                if ((Position1) < 15){
                     DragNext = true;
                     Position1 ++;
-                    //RecalibrateDrag(Position1);
-                } else if (Position1 == 14){
+                    RecalibrateDrag(Position1);
+                } else if (Position1 == 15){
                     in_submenu = false;
                     Pos0 = false;
                     settingsdisplay(menu_index);
@@ -676,137 +653,7 @@ void read_btn() {
     last_left_state = left_state;  
     last_right_state = right_state;  
 }
-// Function to handle  value update in submenu
-/*
-void encoder_isr(uint gpio, uint32_t events) {
-    static uint32_t last_update = 0;
-    uint32_t now = to_ms_since_boot(get_absolute_time());
-
-    if (now - last_update < DEBOUNCE_TIME_MS) return;  // Short debounce for stability
-    last_update = now;
-
-    // Read current encoder state
-    int A = gpio_get(ENCODER_A);
-    int B = gpio_get(ENCODER_B);
-
-    static int last_A = 0;
-    static int last_B = 0;
-    static int pulse_count = 0;  // Tracks pulses for smooth stepping
-
-    // Detect pulse only when A or B changes
-    if ((A != last_A) || (B != last_B)) {  
-        if (A == last_B) {  // Clockwise direction (A follows B)
-            pulse_count++;
-        } else {  // Counterclockwise direction (B follows A)
-            pulse_count--;
-        }
-
-        // Update menu and position variables every 3 pulses
-        if (pulse_count >= 5) {  
-            if (in_submenu) {
-                if (menu_index == 2 && AutoStopLen < 99) {
-                    AutoStopLen = last_AutoStopLen;
-                    AutoStopLen++;
-                }
-                else if (menu_index == 4 && MaxSpeed < 100) {
-                    MaxSpeed = last_MaxSpeed;
-                    MaxSpeed += 10;
-                }
-                else if (menu_index == 5 && MinSpeed < 45) {
-                    MinSpeed = last_MinSpeed;
-                    MinSpeed += 10;
-                }
-                else if (menu_index == 6 && SpoolDiameter < 99) {
-                    SpoolDiameter = last_SpoolDiameter;
-                    SpoolDiameter++;
-                }
-                else if (menu_index == 7) {
-                    // Update only the variable corresponding to Position1
-                    for (int i = 1; i < 15; i++) {
-                        Position2[i] = lastPosition2[i];  // Copy each element individually
-                    } // this helps to save the value so it doesnt restart from zero
-                    if (Position1 == 1 && Position2[1] < 99) Position2[1]++;
-                    if (Position1 == 2 && Position2[2] < 99) Position2[2]++;
-                    if (Position1 == 3 && Position2[3] < 99) Position2[3]++;
-                    if (Position1 == 4 && Position2[4] < 99) Position2[4]++;
-                    if (Position1 == 5 && Position2[5] < 99) Position2[5]++;
-                    if (Position1 == 6 && Position2[6] < 99) Position2[6]++;
-                    if (Position1 == 7 && Position2[7] < 99) Position2[7]++;
-                    if (Position1 == 8 && Position2[8] < 99) Position2[8]++;
-                    if (Position1 == 9 && Position2[9] < 99) Position2[9]++;
-                    if (Position1 == 10 && Position2[10] < 99) Position2[10]++;
-                    if (Position1 == 11 && Position2[11] < 99) Position2[11]++;
-                    if (Position1 == 12 && Position2[12] < 99) Position2[12]++;
-                    if (Position1 == 13 && Position2[13] < 99) Position2[13]++;
-                    if (Position1 == 14 && Position2[14] < 99) Position2[14]++;
-                    for (int i = 1; i < 15; i++) {
-                        lastPosition2[i] = Position2[i];  // Copy each element individually
-                    }
-                }
-                menuActive = true;
-            } else {
-                menu_index = (menu_index < 8) ? menu_index + 1 : 7;
-                update_screen = true;
-            }
-            printf("Menu Index Incremented: %d | Position1: %d\n", menu_index, Position1);
-            pulse_count = 0;  // Reset counter after update
-        } 
-        else if (pulse_count <= -2) {  
-            if (in_submenu) {
-                if (menu_index == 2 && AutoStopLen > 0) {
-                    AutoStopLen = last_AutoStopLen;
-                    AutoStopLen--;
-                }
-                else if (menu_index == 4 && MaxSpeed > 45) {
-                    MaxSpeed = last_MaxSpeed;
-                    MaxSpeed -= 10;
-                }
-                else if (menu_index == 5 && MinSpeed > 0) {
-                    MinSpeed = last_MinSpeed;
-                    MinSpeed -= 10;
-                }
-                else if (menu_index == 6 && SpoolDiameter > 0) {
-                    SpoolDiameter = last_SpoolDiameter;
-                    SpoolDiameter--;
-                }
-                else if (menu_index == 7) {
-                    // Update only the variable corresponding to Position1
-                    for (int i = 1; i < 15; i++) {
-                        Position2[i] = lastPosition2[i];  // Copy each element individually
-                    } // this helps to save the value so it doesnt restart from zero
-                    if (Position1 == 1 && Position2[1] < 99) Position2[1]--;
-                    if (Position1 == 2 && Position2[2] < 99) Position2[2]--;
-                    if (Position1 == 3 && Position2[3] < 99) Position2[3]--;
-                    if (Position1 == 4 && Position2[4] < 99) Position2[4]--;
-                    if (Position1 == 5 && Position2[5] < 99) Position2[5]--;
-                    if (Position1 == 6 && Position2[6] < 99) Position2[6]--;
-                    if (Position1 == 7 && Position2[7] < 99) Position2[7]--;
-                    if (Position1 == 8 && Position2[8] < 99) Position2[8]--;
-                    if (Position1 == 9 && Position2[9] < 99) Position2[9]--;
-                    if (Position1 == 10 && Position2[10] < 99) Position2[10]--;
-                    if (Position1 == 11 && Position2[11] < 99) Position2[11]--;
-                    if (Position1 == 12 && Position2[12] < 99) Position2[12]--;
-                    if (Position1 == 13 && Position2[13] < 99) Position2[13]--;
-                    if (Position1 == 14 && Position2[14] < 99) Position2[14]--;
-                    for (int i = 1; i < 15; i++) {
-                        lastPosition2[i] = Position2[i];  // Copy each element individually
-                    }
-                }
-                menuActive = true;
-            } else {
-                menu_index = (menu_index > -1) ? menu_index - 1 : 0;
-                update_screen = true;
-            }
-
-            // Decrease only the variable corresponding to Position1
-            printf("Menu Index Decremented: %d | Position1: %d\n", menu_index, Position1);
-            pulse_count = 0;  // Reset counter after update
-        }
-    }
-
-    last_A = A;
-    last_B = B;
-} */
+// Function to handle  value update in submenus and settings list. Set up as an interrupt
 ///*
 void encoder_isr(uint gpio, uint32_t events) {
     static uint32_t last_interrupt_time = 0;
@@ -834,14 +681,14 @@ void encoder_isr(uint gpio, uint32_t events) {
         (state == 0b01 && last_state == 0b00) ||  
         (state == 0b11 && last_state == 0b01)) {  
         pulse_count++;
-        printf("[CW] Pulse Incremented. Count: %d\n", pulse_count);
+        //printf("[CW] Pulse Incremented. Count: %d\n", pulse_count);
     }
     else if ((state == 0b01 && last_state == 0b11) ||  
              (state == 0b00 && last_state == 0b01) ||  
              (state == 0b10 && last_state == 0b00) ||  
              (state == 0b11 && last_state == 0b10)) {  
         pulse_count--;
-        printf("[CCW] Pulse Decremented. Count: %d\n", pulse_count);
+        //printf("[CCW] Pulse Decremented. Count: %d\n", pulse_count);
     }
 
     last_state = state;  // **Update last state for next ISR call**
@@ -850,13 +697,13 @@ void encoder_isr(uint gpio, uint32_t events) {
     if (!in_submenu && in_settings_menu) {
         if (pulse_count >= 4) {
             menu_index = (menu_index < 7) ? menu_index + 1 : 7;
-            printf("[CW] Menu Index: %d\n", menu_index);
+            //printf("[CW] Menu Index: %d\n", menu_index);
             pulse_count = 0;
             update_screen = true;
         } 
         else if (pulse_count <= -3) {
             menu_index = (menu_index > 0) ? menu_index - 1 : 0;
-            printf("[CCW] Menu Index: %d\n", menu_index);
+            //printf("[CCW] Menu Index: %d\n", menu_index);
             pulse_count = 0;
             update_screen = true;
         }
@@ -944,107 +791,7 @@ void encoder_isr(uint gpio, uint32_t events) {
         }
     }
 }
-
 //*/
-/*
-void encoder_isr(uint gpio, uint32_t events) {
-    uint32_t current_time = to_ms_since_boot(get_absolute_time());
-
-    // Basic debounce check (10ms)
-    if (current_time - last_interrupt_time < 10) return;
-    last_interrupt_time = current_time;
-
-    int a = gpio_get(ENCODER_A);
-    int b = gpio_get(ENCODER_B);
-
-    static int pulse_count = 0;  // Track pulses for smoother steps
-    bool rotatedCW = false;
-    bool rotatedCCW = false;
-
-    if (a == 0) { // Falling edge of ENC_A
-        // Only handle this when `A` falls, to prevent reading multiple pulses
-        if (b == 1) {
-            pulse_count--;  // Counterclockwise (CCW)
-            rotatedCCW = true;
-        } else if( b == 0) {
-            pulse_count++;  // Clockwise (CW)
-            rotatedCW = true;
-        }
-
-        // Debug output for pulse count and rotation direction
-        printf("Rotated %s: Pulse Count = %d\n", rotatedCW ? "CW" : "CCW", pulse_count);
-
-        // Menu Navigation (Threshold = 8)
-        if (!in_submenu) {
-            if (pulse_count >= 6) {
-                if (menu_index < 7) menu_index++;
-                update_screen = true;
-                pulse_count = 0;
-                printf("Menu Index Incremented: %d\n", menu_index);
-            } 
-            else if (pulse_count <= -4) {
-                if (menu_index > 0) menu_index--;
-                update_screen = true;
-                pulse_count = 0;
-                printf("Menu Index Decremented: %d\n", menu_index);
-            }
-        } 
-        else {
-            // Submenu Adjustments (Threshold = 3)
-            if (pulse_count >= 3 || pulse_count <= -3) {
-                int adjustment = (pulse_count >= 3) ? 1 : -1;
-                pulse_count = 0;
-
-                // Determine increment based on selected digit
-                int increment = (selected_digit == 1) ? 1 : 10;
-                adjustment *= increment;
-
-                // Adjust the values in submenu
-                if (menu_index == 2) {
-                    if (AutoStopLen + adjustment >= 0 && AutoStopLen + adjustment <= 99) {
-                        AutoStopLen += adjustment;
-                        printf("AutoStopLen = %d\n", AutoStopLen);
-                    }
-                } 
-                else if (menu_index == 4) {
-                    if (MaxSpeed + adjustment >= 45 && MaxSpeed + adjustment <= 100) {
-                        MaxSpeed += adjustment;
-                        printf("MaxSpeed = %d\n", MaxSpeed);
-                    }
-                } 
-                else if (menu_index == 5) {
-                    if (MinSpeed + adjustment >= 0 && MinSpeed + adjustment <= 45) {
-                        MinSpeed += adjustment;
-                        printf("MinSpeed = %d\n", MinSpeed);
-                    }
-                } 
-                else if (menu_index == 6) {
-                    if (SpoolDiameter + adjustment >= 0 && SpoolDiameter + adjustment <= 99) {
-                        SpoolDiameter += adjustment;
-                        printf("SpoolDiameter = %d\n", SpoolDiameter);
-                    }
-                } 
-                else if (menu_index == 7) {
-                    for (int i = 1; i < 15; i++) Position2[i] = lastPosition2[i];
-
-                    if (Position1 >= 1 && Position1 <= 14) {
-                        if (Position2[Position1] + adjustment >= 0 && Position2[Position1] + adjustment <= 99) {
-                            Position2[Position1] += adjustment;
-                            printf("Position2[%d] = %d\n", Position1, Position2[Position1]);
-                        }
-                    }
-
-                    for (int i = 1; i < 15; i++) lastPosition2[i] = Position2[i];
-                }
-
-                update_screen = true;
-            }
-        }
-    }
-}*/
-
-
-
 // Function to check the state of the encoder button and handle button presses
 void check_encoder() {
     static bool button_was_pressed = false; 
@@ -1115,6 +862,7 @@ void gpio_setup() {
     gpio_set_dir(RBTN, GPIO_IN);
     gpio_pull_down(RBTN); //Pull-down for Right Button
 }
+// Function to handle all while loop changes
 void screen_update(int linelength, int dragset) {
     read_btn(); // check button state
     check_encoder(); // check encoder button state
@@ -1146,9 +894,10 @@ void screen_update(int linelength, int dragset) {
                 } else if (menu_index == 6 && SpoolDiameter != last_SpoolDiameter) { // Check if SpoolDiameter changed
                     selectedmenudisplay(menu_index);
                     last_SpoolDiameter = SpoolDiameter;  // Store the new value
-                } else if (menu_index == 7 && Position2 != lastPosition2 || DragNext == true){
-                    DragNext = false;
+                } else if (menu_index == 7 && (Position2 != lastPosition2 || DragNext == true)){
                     RecalibrateDrag(Position1);
+                    printf("Position 1 %d\n", Position1);
+                    DragNext = false;
                 }
             }
         } else {
@@ -1162,6 +911,7 @@ void screen_update(int linelength, int dragset) {
     
     //sleep_ms(100); // Add small delay to prevent excessive updates
 }
+// function to handle the initialization of the screen
 void screen_setup(){
     stdio_init_all();
     i2c_setup();
