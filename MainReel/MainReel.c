@@ -124,14 +124,14 @@ uint16_t read_potentiometer() {
 
 // Function to set PWM duty cycle with limits
 void set_pwm_duty(uint16_t duty_cycle) {
-    int activation_threshold = 5;
+    int activation_threshold = 20;
     // Temporary min/max speed init
-    MinSpeed = 5;
+    MinSpeed = 20;
     MaxSpeed = 100;
 
     uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
-    uint16_t adc_threshold = (MinSpeed * PWM_RESOLUTION) / 100; // 5% of max duty cycle as threshold 
-
+    uint16_t adc_threshold = (activation_threshold * PWM_RESOLUTION) / 100; //
+    //printf("Duty Cycle: %u, ADC Threshold: %u, MinSpeed: %d, MaxSpeed: %d\n", duty_cycle, adc_threshold, MinSpeed, MaxSpeed);
     if (duty_cycle < adc_threshold) {
         pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), 0);
         return;
@@ -146,7 +146,7 @@ void set_pwm_duty(uint16_t duty_cycle) {
     uint16_t output_duty = min_duty + (uint16_t)(scaled * (max_duty - min_duty));
     if (output_duty > 65000) output_duty = 65000;
 
-    printf( "Setting PWM Duty Cycle: %u (scaled from %u)\n", output_duty, duty_cycle);
+    //printf( "Setting PWM Duty Cycle: %u (scaled from %u)\n", output_duty, duty_cycle);
 
     pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), output_duty);
 }
@@ -209,7 +209,7 @@ void core1() {
 
     while (true) {
         
-
+        
         // PWM Code
         uint16_t pot_value = read_potentiometer();
         duty_cycle_test = (pot_value * PWM_RESOLUTION) / 4095; // Scale to 16-bit
@@ -226,12 +226,12 @@ void core1() {
         // Print values
         float voltage = pot_value * (3.3f / 4095.0f);
         float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
-        printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
+        //printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
 
         // Example: Dynamically update limits (could be triggered by a button/UART)
         // Uncomment this line to change limits dynamically during execution
         // update_limits(20000, 45000);
-
+        
         screen_update(length, drag);
     }
 }
@@ -240,12 +240,10 @@ int main() {
     stdio_init_all(); // Initialize standard I/O'
     multicore_launch_core1(core1);
     // Initialize GPIO pins for input
+    gpio_init(14); 
+    gpio_set_dir(14, GPIO_IN); 
     gpio_init(15); 
     gpio_set_dir(15, GPIO_IN); 
-    gpio_init(14); 
-    gpio_set_dir(8, GPIO_IN); 
-    gpio_init(15); 
-    gpio_set_dir(9, GPIO_IN); 
     gpio_init(10); 
     gpio_set_dir(10, GPIO_IN); 
     gpio_init(11); 
@@ -293,10 +291,10 @@ int main() {
         }*/
 
         //printf("%d\n", count_drag);
-        int chanA = gpio_get(10); // Read encoder channels for rotation count
-        int chanB = gpio_get(11);
-        int chanDragA = gpio_get(8); // Read encoder channels for drag count
-        int chanDragB = gpio_get(9);
+        int chanA = gpio_get(11); // Read encoder channels for rotation count
+        int chanB = gpio_get(10);
+        int chanDragA = gpio_get(15); // Read encoder channels for drag count
+        int chanDragB = gpio_get(14);
 
         // Update rotation count based on encoder signals
         if (chanA == 1) {
