@@ -523,6 +523,7 @@ void settingsdisplay(int pos){
 }
 // Function to display main screen information for line and drag in either imperial or metric units
 void cfa634_main(int line, int drag) {
+    isImperial = (measurement_system == 1); // 1 for imperial, 0 for metric
     // Check if the current measurement system is imperial
     if (isImperial) {
         //cfa634_clear_screen(); // Clear the display
@@ -603,6 +604,7 @@ void read_btn() {
     if (left_state && !last_left_state) {  
         left_pressed = true;  
         mobile_motor_control = 0;
+        printf("Left button pressed\n"); 
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
@@ -624,6 +626,7 @@ void read_btn() {
     if (right_state && !last_right_state) {  
         right_pressed = true;  
         mobile_motor_control = 0;
+        printf("Right button pressed\n");
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Save to last variable then exit
@@ -799,6 +802,7 @@ void check_encoder() {
     static bool button_pressed = false; 
 
     if (gpio_get(ENCODER_BTN) == 1) {  // Button is pressed
+        printf( "Encoder button pressed\n");
         if (!button_pressed) {  
             mobile_motor_control = 0;
             button_pressed = true; 

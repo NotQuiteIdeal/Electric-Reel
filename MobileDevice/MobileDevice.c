@@ -1088,6 +1088,8 @@ void BT_Core(void) {
      update_battery_icon();
      create_bluetooth_char();
      while (1) {
+        metric_mode = (measurement_system == 0);
+        stop_length = auto_stop_length;
          // If not in settings mode, check for a long press to enter settings.
          if (!in_settings_menu) {
              check_button_long_press();
@@ -1099,6 +1101,17 @@ void BT_Core(void) {
              if (drag_value != drag_set) {
                 drag_value = drag_set;
                 display_main_screen();
+             }
+             if (fish_alarm == 1) {
+                    // If fish alarm is triggered, show the alarm icon and turn on the buzzer
+                    update_icon(1, ICON_SOLID); // Update the alarm icon to solid
+                    gpio_put(LED_13, 1); // Turn on Buzzer 13 for alarm indication
+                    gpio_put(LED_28, 1); // Turn on LED 28 for alarm indication
+                } else if (fish_alarm == 0) {
+                    // If fish alarm is cleared, turn off the alarm icon and buzzer
+                    update_icon(1, ICON_CLEAR);
+                    gpio_put(LED_13, 0);
+                    gpio_put(LED_28, 0);
              }
          }
          // If in settings mode, either check for subpage exit or selection.
