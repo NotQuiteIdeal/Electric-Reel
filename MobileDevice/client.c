@@ -153,7 +153,7 @@ void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *pa
     UNUSED(size);
     
     uint8_t event = hci_event_packet_get_type(packet);
-    printf("Received GATT Event: 0x%02X\n", event);  // Debug print
+    if (event != 0xA7) printf("Received GATT Event: 0x%02X\n", event);  // Debug print
 
     // Immediately handles notifications
     if (event == GATT_EVENT_NOTIFICATION) {

@@ -213,7 +213,7 @@ uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t att_hand
 
 // Handle BLE Write Requests
 int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_handle, uint16_t transaction_mode, uint16_t offset, uint8_t *buffer, uint16_t buffer_size) {
-    printf("Received write on handle: 0x%04X\n", attribute_handle);
+    if (attribute_handle != 0x0015) printf("Received write on handle: 0x%04X\n", attribute_handle);
     
     if (attribute_handle == LINE_LENGTH_CHAR_CCCD_HANDLE) {
         printf("Client Subscribed to Line Length!\n");

@@ -464,7 +464,7 @@ void update_icon(uint8_t icon_index, IconMode mode) {
      lcd_send_data(icon_data);  // Write battery icon data
      lcd_send_command(0x30);  // Return to normal mode
  
-     printf("[BATTERY] Voltage: %.2fV | Level: %d%% | Icon: 0x%X\n", battery_voltage, battery_level, icon_data);
+     //printf("[BATTERY] Voltage: %.2fV | Level: %d%% | Icon: 0x%X\n", battery_voltage, battery_level, icon_data);
 }
 
 // Charging animation function
@@ -771,6 +771,7 @@ void create_bluetooth_char(void) {
                      ccw_fall = false;
                      cw_fall = false;
                      metric_mode = false;
+                     measurement_system = 0;
                      printf("[SUBPAGE] Set to Imperial Mode.\n");
                  }
              } else if (gpio == ENCODER_B) {
@@ -779,6 +780,7 @@ void create_bluetooth_char(void) {
                      cw_fall = false;
                      ccw_fall = false;
                      metric_mode = true;
+                     measurement_system = 1;
                      printf("[SUBPAGE] Set to Metric Mode.\n");
                  }
              }
@@ -916,7 +918,7 @@ void create_bluetooth_char(void) {
              update_icon(0x0C, ICON_BLINK);
              led_27_on = true;
              button_15_released = false;
-
+            printf("Writing reel speed to motor: %d%%\n", reel_speed);
              write_motor_speed(reel_speed);
          }
      } else {
@@ -1088,7 +1090,7 @@ void BT_Core(void) {
      update_battery_icon();
      create_bluetooth_char();
      while (1) {
-        metric_mode = (measurement_system == 0);
+        metric_mode = (measurement_system == 1);
         stop_length = auto_stop_length;
          // If not in settings mode, check for a long press to enter settings.
          if (!in_settings_menu) {

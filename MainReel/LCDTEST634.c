@@ -523,7 +523,7 @@ void settingsdisplay(int pos){
 }
 // Function to display main screen information for line and drag in either imperial or metric units
 void cfa634_main(int line, int drag) {
-    isImperial = (measurement_system == 1); // 1 for imperial, 0 for metric
+    isImperial = (measurement_system == 0); // 1 for imperial, 0 for metric
     // Check if the current measurement system is imperial
     if (isImperial) {
         //cfa634_clear_screen(); // Clear the display
@@ -871,6 +871,9 @@ void screen_update(int linelength, int dragset) {
     read_btn(); // check button state
     check_encoder(); // check encoder button state
 
+    isImperial = (measurement_system == 0);
+    AutoStopLen = auto_stop_length;
+    
     // Check if we're not in the settings menu or submenu
     if (!in_settings_menu && !in_submenu) {
         if (linelength != last_linelength || dragset != last_dragset) {
