@@ -34,6 +34,7 @@ extern uint8_t motor_status;
 extern uint8_t motor_speed;
 extern uint8_t fish_alarm;
 extern uint8_t ping_test_status;
+extern uint8_t auto_stop_length;
 extern int ping_rate_count;
 volatile int mobile_motor_control = 0; // 0 is no, 1 is yes
 bool ping_start = false;
@@ -48,6 +49,7 @@ extern volatile bool in_settings_menu;
 extern volatile int MaxSpeed;
 extern volatile int MinSpeed;
 extern volatile int Position2[16];
+extern volatile int AutoStopLen;
 
 // Define min and max duty cycle limits (default values)
 volatile uint16_t min_duty = 0; // 0% duty cycle
@@ -124,6 +126,11 @@ uint16_t read_potentiometer() {
 
 // Function to set PWM duty cycle with limits
 void set_pwm_duty(uint16_t duty_cycle) {
+
+    if (line_length - auto_stop_length <= 0) {
+        pwm_set_chan_level(pwm_gpio_to_slice_num(PWM_PIN), pwm_gpio_to_channel(PWM_PIN), 0); // Stops motor if there is no more line
+        return;
+    }
     int activation_threshold = 20;
     // Temporary min/max speed init
     MinSpeed = 20;
@@ -131,7 +138,7 @@ void set_pwm_duty(uint16_t duty_cycle) {
 
     uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
     uint16_t adc_threshold = (activation_threshold * PWM_RESOLUTION) / 100; //
-    //printf("Duty Cycle: %u, ADC Threshold: %u, MinSpeed: %d, MaxSpeed: %d\n", duty_cycle, adc_threshold, MinSpeed, MaxSpeed);
+    printf("Duty Cycle: %u, ADC Threshold: %u, MinSpeed: %d, MaxSpeed: %d, Mobile Motor Control: %d\n", duty_cycle, adc_threshold, MinSpeed, MaxSpeed, mobile_motor_control);
     if (duty_cycle < adc_threshold) {
         pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), 0);
         return;
@@ -231,7 +238,7 @@ void core1() {
         // Example: Dynamically update limits (could be triggered by a button/UART)
         // Uncomment this line to change limits dynamically during execution
         // update_limits(20000, 45000);
-        
+        AutoStopLen = auto_stop_length;
         screen_update(length, drag);
     }
 }
@@ -285,6 +292,9 @@ int main() {
     int alarm_trigger = 0; // Holds value of length when sensitivity is tested
 
     while (true) {
+        if (line_length - auto_stop_length <= 0) { 
+            reg = true; // Reenable alarm after fish is reeled in
+        }
         /*if (gpio_get(15) == 1){ // If button is pressed, reset drag count
             count_drag = 0;
             drag = 0;

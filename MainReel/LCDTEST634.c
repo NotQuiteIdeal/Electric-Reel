@@ -50,7 +50,7 @@ volatile bool encoder_btpress = false; // store if encoder is pressed
 volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
-volatile int last_AutoStopLen = 20; // previous value next 4
+volatile int last_AutoStopLen = 0; // previous value next 4
 volatile int last_MaxSpeed = 70;
 volatile int last_MinSpeed = 10;
 volatile int last_SpoolDiameter = 20;
@@ -604,7 +604,8 @@ void read_btn() {
     if (left_state && !last_left_state) {  
         left_pressed = true;  
         mobile_motor_control = 0;
-        printf("Left button pressed\n"); 
+        fish_alarm = 0;
+        //printf("Left button pressed\n"); 
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
@@ -626,7 +627,8 @@ void read_btn() {
     if (right_state && !last_right_state) {  
         right_pressed = true;  
         mobile_motor_control = 0;
-        printf("Right button pressed\n");
+        fish_alarm = 0;
+        //printf("Right button pressed\n");
         
         if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
             // Save to last variable then exit
@@ -663,6 +665,7 @@ void encoder_isr(uint gpio, uint32_t events) {
     static uint8_t last_state = 0b11;
     static int pulse_count = 0;
     mobile_motor_control = 0;
+    fish_alarm = 0;
 
     uint32_t now = to_ms_since_boot(get_absolute_time());
 
@@ -830,6 +833,8 @@ void check_encoder() {
                     if (menu_index == 4) MaxSpeed = last_MaxSpeed;
                     if (menu_index == 5) MinSpeed = last_MinSpeed;
                     if (menu_index == 6) SpoolDiameter = last_SpoolDiameter;
+
+                    last_AutoStopLen = auto_stop_length;
                     
                     selectedmenudisplay(selected_menu);  
                 } 
@@ -873,7 +878,7 @@ void screen_update(int linelength, int dragset) {
 
     isImperial = (measurement_system == 0);
     AutoStopLen = auto_stop_length;
-    
+
     // Check if we're not in the settings menu or submenu
     if (!in_settings_menu && !in_submenu) {
         if (linelength != last_linelength || dragset != last_dragset) {

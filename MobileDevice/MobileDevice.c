@@ -180,6 +180,7 @@ float get_battery_voltage() {
  // User-adjustable settings.
  int reel_speed = 50;       // Reel-Up speed (as a percentage, 0–100%) in 10% steps.
  int stop_length = 0;      // Auto stop length in feet (0–100 FT) in 1-ft steps.
+ int temp_stop_length = 0; // Temporary variable for stop length during editing.
  bool metric_mode = false;  // false for Imperial units, true for Metric.
  bool alarm_enabled = true; // If false, the buzzer is disabled.
  float drag_value = 5.0f;   // Independent drag value (in ft–lbs); later can be updated separately.
@@ -203,6 +204,7 @@ float get_battery_voltage() {
  extern volatile uint8_t measurement_system;
  extern volatile int connection_status;
  volatile int fart = 0;
+ volatile int fart2 = 0;
  //settings_t current_settings;
 
  /*
@@ -541,10 +543,10 @@ void create_bluetooth_char(void) {
          case 1:
              lcd_print_centered("Auto Stop Length", 1);
              if (metric_mode) {
-                 float meters = stop_length * 0.3048f;  // Convert feet to meters.
+                 float meters = temp_stop_length * 0.3048f;  // Convert feet to meters.
                  snprintf(buffer, sizeof(buffer), "%.1f M", meters);
              } else {
-                 sprintf(buffer, "%d FT", stop_length);
+                 sprintf(buffer, "%d FT", temp_stop_length);
              }
              lcd_print_centered(buffer, 2);
              lcd_print_normal("Press to Return.", 4);
@@ -586,6 +588,7 @@ void create_bluetooth_char(void) {
      cw_fall = false;
      ccw_fall = false;
      in_submenu = true;
+     temp_stop_length = auto_stop_length; // Store the current stop length for editing
      update_subpage(selection);
      // Set a short ignore period (100 ms) to ignore stale encoder button presses
      // when exiting the subpage.
@@ -673,6 +676,7 @@ void create_bluetooth_char(void) {
          // Write adjusted values back to server
         switch (menu_index) {
             case 1:
+                stop_length = temp_stop_length;
                 write_auto_stop_length(stop_length);
                 break;
             case 2:
@@ -680,7 +684,7 @@ void create_bluetooth_char(void) {
                 break;
             case 3:
                 break;
-            // case 0 is motor speed — skipped intentionally
+            
         }
          display_settings_menu(menu_index);
          last_menu_index = menu_index;
@@ -750,18 +754,20 @@ void create_bluetooth_char(void) {
                  if (ccw_fall && (gpio_state == 0b00)) {
                      ccw_fall = false;
                      cw_fall = false;
-                     stop_length -= 1;
-                     if (stop_length < 0) stop_length = 0;
-                     printf("[SUBPAGE] Decreased Length: %d FT\n", stop_length);
+                     temp_stop_length -= 1;
+                     if (temp_stop_length < 0) temp_stop_length = 0;
+                     write_auto_stop_length(temp_stop_length); // Write new stop length to server
+                     printf("[SUBPAGE] Decreased Length: %d FT\n", temp_stop_length);
                  }
              } else if (gpio == ENCODER_B) {
                  if (!ccw_fall && (gpio_state == 0b01)) { ccw_fall = true; }
                  if (cw_fall && (gpio_state == 0b00)) {
                      cw_fall = false;
                      ccw_fall = false;
-                     stop_length += 1;
-                     if (stop_length > 100) stop_length = 100;
-                     printf("[SUBPAGE] Increased Length: %d FT\n", stop_length);
+                     temp_stop_length += 1;
+                     if (temp_stop_length > 100) temp_stop_length = 100;
+                     write_auto_stop_length(temp_stop_length); // Write new stop length to server
+                     printf("[SUBPAGE] Increased Length: %d FT\n", temp_stop_length);
                  }
              }
          } else if (menu_index == 2) { // Metric/Imperial toggle.
@@ -910,15 +916,15 @@ void create_bluetooth_char(void) {
      if (gpio_get(BUTTON_15)) {
          gpio_put(LED_28, 0);
          gpio_put(LED_13, 0);
-         write_fish_alarm(0);
          if (button_15_press_time == 0 && button_15_released) {
              button_15_press_time = to_ms_since_boot(get_absolute_time());
+             write_fish_alarm(0);
          } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 3000 && !led_27_on) {
              gpio_put(LED_27, 1);
              update_icon(0x0C, ICON_BLINK);
              led_27_on = true;
              button_15_released = false;
-            printf("Writing reel speed to motor: %d%%\n", reel_speed);
+             printf("Writing reel speed to motor: %d%%\n", reel_speed);
              write_motor_speed(reel_speed);
          }
      } else {
@@ -1093,6 +1099,7 @@ void BT_Core(void) {
         metric_mode = (measurement_system == 1);
         stop_length = auto_stop_length;
          // If not in settings mode, check for a long press to enter settings.
+         //printf("Temp Auto Stop: %d, Auto Stop (Client): %d, Auto Stop (Server): %d\n", temp_stop_length, stop_length, auto_stop_length);
          if (!in_settings_menu) {
              check_button_long_press();
              if (connection_status == 1 && fart == 0) (display_main_screen(), fart = 1);
