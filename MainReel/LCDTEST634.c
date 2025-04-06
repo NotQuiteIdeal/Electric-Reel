@@ -35,10 +35,10 @@ volatile bool ignore_next_press = false; // ingore if less than that time and no
 volatile bool in_submenu = false; // stores if in submen
 volatile int selected_digit = 1; // which digit the cursors is on
 volatile bool isImperial = true; //false = metric, true = imperial
-volatile int AutoStopLen = 0;     // Store value for setting
-volatile int MaxSpeed = 0;        // Store value for setting
-volatile int MinSpeed = 0;        // Store value for setting
-volatile int SpoolDiameter = 0;   // Store value for setting
+volatile int AutoStopLen = 10;     // Store value for setting
+volatile int MaxSpeed = 70;        // Store value for setting
+volatile int MinSpeed = 10;        // Store value for setting
+volatile int SpoolDiameter = 37;   // Store value for setting
 volatile int selected_menu = 0; // which menu_index is selected
 volatile bool right_pressed = false; // store if right button is pressed
 volatile bool left_pressed = false; // store if left button is pressed
@@ -50,18 +50,21 @@ volatile bool encoder_btpress = false; // store if encoder is pressed
 volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
-volatile int last_AutoStopLen = 0; // previous value next 4
+volatile int last_AutoStopLen = 10; // previous value next 4
 volatile int last_MaxSpeed = 70;
 volatile int last_MinSpeed = 10;
-volatile int last_SpoolDiameter = 20;
+volatile int last_SpoolDiameter = 37;
 volatile double SDia = 0.0; // used for calculating spool diameter to decimal to 1
 volatile bool update_screen = false; // flag to determine to update screen
 volatile int LineLength = 0;
 volatile int Position1 = 1; // position for sorting through recal drag
 volatile bool Pos0 = false; // flag to tell to go to recal drag call function
-volatile int Position2[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80}; // drag recalibration and display
-volatile int lastPosition2[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80}; // drag recalibration 
+volatile int Position2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76, 80, 84}; // drag recalibration and display
+volatile int lastPosition2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76, 80, 84}; // drag recalibration 
 volatile bool DragNext = false; // flag to determine to go to next drag
+volatile bool ISPOS0 = false; // False means it is not and true means it is
+int alarm_sensitivity = 3;
+int rotations = 0;
 //leave alone
 static int encoder_value = 0;
 static uint32_t last_state = 0;
@@ -71,6 +74,7 @@ volatile int last_encoder_A = 0;
 volatile int last_encoder_B = 0;
 volatile int pulse1=0;
 volatile uint32_t last_interrupt_time = 0;
+int count_drag = 0;
 
 extern volatile int mobile_motor_control;
 extern uint16_t line_length;
@@ -328,13 +332,13 @@ void selectedmenudisplay(int pos) {
             cfa634_print("  RETURNING > MAIN  ");
             setcursor(0, 3);
             cfa634_print("                    ");
-            sleep_ms(1000); // delay to show message
+            sleep_ms(500); // delay to show message
             in_submenu = false; // this line and next tell to return to main
             in_settings_menu = false;
 
             // set values to update the main screen
-            last_linelength = -1;
-            last_dragset = -1;
+            last_linelength = line_length;
+            last_dragset = drag_set;
             break;
         case 1:
             setcursor(0, 0);
@@ -349,7 +353,7 @@ void selectedmenudisplay(int pos) {
         case 2: {
             char display_value[21];
             
-            sprintf(display_value, "         %d%d         ", AutoStopLen / 10, AutoStopLen % 10);
+            sprintf(display_value, "         %d          ", AutoStopLen);
             
             // Update display immediately
             
@@ -424,7 +428,7 @@ void selectedmenudisplay(int pos) {
             setcursor(0, 0);
             cfa634_print("                    ");
             setcursor(0, 1);
-            cfa634_print("    Position 0      ");
+            cfa634_print("    POSITION 0      ");
             setcursor(0, 2);
             cfa634_print("    LEFT < YES      ");
             setcursor(0, 3);
@@ -518,6 +522,15 @@ void settingsdisplay(int pos){
             setcursor(0, 3);
             cfa634_print(">7.RECAL DRAG       ");
             break;
+        case 8:
+            setcursor(0, 0);
+            cfa634_print(">8.ALARM SENSITIVITY");
+            setcursor(0, 1);
+            cfa634_print("                    ");
+            setcursor(0, 2);
+            cfa634_print("                    ");
+            setcursor(0, 3);
+            cfa634_print("                    ");
         default: break;
     }
 }
@@ -606,8 +619,11 @@ void read_btn() {
         mobile_motor_control = 0;
         fish_alarm = 0;
         //printf("Left button pressed\n"); 
-        
-        if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
+        if (!in_settings_menu && !in_submenu && (ISPOS0 == false)){
+            count_drag = 0;
+            ISPOS0 = true;
+        }
+        if (in_submenu && menu_index != 0 && menu_index != 1 && menu_index != 3 && menu_index != 7) {  
             if (menu_index == 2) AutoStopLen = last_AutoStopLen;
             if (menu_index == 4) MaxSpeed = last_MaxSpeed;
             if (menu_index == 5) MinSpeed = last_MinSpeed;
@@ -629,8 +645,11 @@ void read_btn() {
         mobile_motor_control = 0;
         fish_alarm = 0;
         //printf("Right button pressed\n");
-        
-        if (in_submenu && menu_index != 0 && menu_index != 3 && menu_index != 7) {  
+        if (!in_settings_menu && !in_submenu && (ISPOS0 == false)){
+            count_drag = 0;
+            ISPOS0 = true;
+        }        
+        if (in_submenu && menu_index != 0 && menu_index != 1 && menu_index != 3 && menu_index != 7) {  
             // Save to last variable then exit
             if (menu_index == 2) last_AutoStopLen = AutoStopLen;
             if (menu_index == 4) last_MaxSpeed = MaxSpeed;
@@ -638,6 +657,8 @@ void read_btn() {
             if (menu_index == 6) last_SpoolDiameter = SpoolDiameter;
             in_submenu = false;  
             settingsdisplay(menu_index);  
+        } else if (menu_index == 1) {
+            rotations = 0;
         } else if (menu_index == 3) {  
             isImperial = true;  
         } else if (menu_index == 7){
@@ -702,7 +723,7 @@ void encoder_isr(uint gpio, uint32_t events) {
     // **Update menu index when threshold is reached**
     if (!in_submenu && in_settings_menu) {
         if (pulse_count >= 4) {
-            menu_index = (menu_index < 7) ? menu_index + 1 : 7;
+            menu_index = (menu_index < 8) ? menu_index + 1 : 8;
             //printf("[CW] Menu Index: %d\n", menu_index);
             pulse_count = 0;
             update_screen = true;
@@ -716,16 +737,17 @@ void encoder_isr(uint gpio, uint32_t events) {
     } else if(in_submenu){
         if (pulse_count >=3) {
             if (menu_index == 2 && AutoStopLen < 99) {
-                AutoStopLen = last_AutoStopLen;
+                //AutoStopLen = last_AutoStopLen;
                 AutoStopLen++;
+                //printf("Auto stop length inc %d\n", AutoStopLen);
             } else if (menu_index == 4 && MaxSpeed < 100) {
-                MaxSpeed = last_MaxSpeed;
+                //MaxSpeed = last_MaxSpeed;
                 MaxSpeed += 10;
             } else if (menu_index == 5 && MinSpeed < 45) {
-                MinSpeed = last_MinSpeed;
+                //MinSpeed = last_MinSpeed;
                 MinSpeed += 10;
             } else if (menu_index == 6 && SpoolDiameter < 99) {
-                SpoolDiameter = last_SpoolDiameter;
+                //SpoolDiameter = last_SpoolDiameter;
                 SpoolDiameter++;
             } else if (menu_index == 7) {
                 // Update only the variable corresponding to Position1
@@ -756,8 +778,9 @@ void encoder_isr(uint gpio, uint32_t events) {
             pulse_count = 0;
         } else if (pulse_count <= -2) {
             if (menu_index == 2 && AutoStopLen > 0) {
-                AutoStopLen = last_AutoStopLen;
+                //AutoStopLen = last_AutoStopLen;
                 AutoStopLen--;
+                //printf("Auto stop length dec %d\n", AutoStopLen);
             } else if (menu_index == 4 && MaxSpeed > 45) {
                 MaxSpeed = last_MaxSpeed;
                 MaxSpeed -= 10;
@@ -805,7 +828,7 @@ void check_encoder() {
     static bool button_pressed = false; 
 
     if (gpio_get(ENCODER_BTN) == 1) {  // Button is pressed
-        printf( "Encoder button pressed\n");
+        //printf( "Encoder button pressed\n");
         if (!button_pressed) {  
             mobile_motor_control = 0;
             button_pressed = true; 
@@ -876,16 +899,35 @@ void screen_update(int linelength, int dragset) {
     read_btn(); // check button state
     check_encoder(); // check encoder button state
 
-    isImperial = (measurement_system == 0);
-    AutoStopLen = auto_stop_length;
+    //isImperial = (measurement_system == 0);
+    //AutoStopLen = auto_stop_length;
 
     // Check if we're not in the settings menu or submenu
+    /*
     if (!in_settings_menu && !in_submenu) {
         if (linelength != last_linelength || dragset != last_dragset) {
             cfa634_main(linelength, dragset);
             last_linelength = linelength;  // Store the new values
             last_dragset = dragset;
         }
+    }*/
+
+    if (!in_settings_menu && !in_submenu) {
+        if (ISPOS0 == true){
+            AutoStopLen = auto_stop_length;
+            isImperial = (measurement_system == 0);
+            cfa634_main(linelength, dragset);
+        } else if(ISPOS0 == false) {
+            setcursor(0, 0);
+            cfa634_print("     SET DRAG TO    ");
+            setcursor(0, 1);
+            cfa634_print("     POSITION 0     ");
+            setcursor(0, 2);
+            cfa634_print("    LEFT OR RIGHT   ");
+            setcursor(0, 3);
+            cfa634_print("   BTN TO CONFIRM   ");
+        }
+        
     }
 
     // In settings mode, check for submenu or main menu

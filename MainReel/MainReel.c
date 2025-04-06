@@ -50,6 +50,10 @@ extern volatile int MaxSpeed;
 extern volatile int MinSpeed;
 extern volatile int Position2[16];
 extern volatile int AutoStopLen;
+extern volatile int SpoolDiameter;
+extern int count_drag;
+extern int alarm_sensitivity;
+extern int rotations;
 
 // Define min and max duty cycle limits (default values)
 volatile uint16_t min_duty = 0; // 0% duty cycle
@@ -59,8 +63,8 @@ volatile int length = 0;
 volatile int drag = 0;
 //volatile int Position[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80};
 int count = 0;
-int rotations = 0;
-int count_drag = 0;
+//int rotations = 0;
+//int count_drag = 0;
 int oldVal = 0;
 int newVal = 0;
 
@@ -274,11 +278,11 @@ int main() {
     gpio_init(BUZZER_PIN);
     gpio_set_dir(BUZZER_PIN, GPIO_OUT);
 
-    double Dmax = 3.685;
+    double Dmax = SpoolDiameter/10;
     double Dmin = 2.00;
-    int rotations = 0;
+    //int rotations = 0;
     int count = 0;
-    int count_drag = 0;
+    //int count_drag = 0;
     int oldVal = 0;
     int newVal = 0;
     int oldValdrag = 0;
@@ -287,7 +291,7 @@ int main() {
     int button = 0;
     int reg_count = 0;
 
-    int alarm_sensitivity = 1; // Length in units to trigger the alarm
+    //int alarm_sensitivity = 1; // Length in units to trigger the alarm
     int alarm_progress = 0; // Progress towards the alarm trigger
     int alarm_trigger = 0; // Holds value of length when sensitivity is tested
 
