@@ -63,8 +63,10 @@ volatile int Position2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76
 volatile int lastPosition2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76, 80, 84}; // drag recalibration 
 volatile bool DragNext = false; // flag to determine to go to next drag
 volatile bool ISPOS0 = false; // False means it is not and true means it is
-int alarm_sensitivity = 3;
-int rotations = 0;
+int alarmsensitivity = 1;
+//int rotations = 0;
+volatile bool alarmsen = false;
+volatile bool linereset = false;
 //leave alone
 static int encoder_value = 0;
 static uint32_t last_state = 0;
@@ -85,6 +87,7 @@ extern uint8_t fish_alarm;
 extern uint8_t ping_test_status;
 extern uint8_t measurement_system;
 extern uint8_t auto_stop_length;
+
 
 // Function to send a command to the LCD
 void cfa634_send_command(uint8_t cmd) {
@@ -434,6 +437,17 @@ void selectedmenudisplay(int pos) {
             setcursor(0, 3);
             cfa634_print("  PRESS DIAL > RET  ");
             break;
+        case 8:
+            char display_value4[21];
+            sprintf(display_value4, "        %02d          ", alarmsensitivity);
+            setcursor(0, 0);
+            cfa634_print(" ALARM SENSITIVITY  ");
+            setcursor(0, 1);
+            cfa634_print("    FEET 1 TO 10    ");
+            setcursor(0, 2);
+            cfa634_print(display_value4);
+            setcursor(0, 3);
+            cfa634_print("   RIGHT TO EXIT    ");
         default: 
             break;
     }
@@ -450,7 +464,7 @@ void settingsdisplay(int pos){
             setcursor(0, 2);
             cfa634_print(" 2.AUTO STOP LENGTH ");
             setcursor(0, 3);
-            cfa634_print(" 3.METRIC>IMPERIAL  ");
+            cfa634_print(" 3.IMPERIAL>METRIC  ");
             break;
         case 1:
             setcursor(0, 0);
@@ -460,7 +474,7 @@ void settingsdisplay(int pos){
             setcursor(0, 2);
             cfa634_print(" 2.AUTO STOP LENGTH ");
             setcursor(0, 3);
-            cfa634_print(" 3.METRIC>IMPERIAL  ");
+            cfa634_print(" 3.IMPERIAL>METRIC  ");
             break;
         case 2:
             setcursor(0, 0);
@@ -470,7 +484,7 @@ void settingsdisplay(int pos){
             setcursor(0, 2);
             cfa634_print(">2.AUTO STOP LENGTH ");
             setcursor(0, 3);
-            cfa634_print(" 3.METRIC>IMPERIAL  ");
+            cfa634_print(" 3.IMPERIAL>METRIC  ");
             break;
         case 3:
             setcursor(0, 0);
@@ -480,7 +494,7 @@ void settingsdisplay(int pos){
             setcursor(0, 2);
             cfa634_print(" 2.AUTO STOP LENGTH ");
             setcursor(0, 3);
-            cfa634_print(">3.METRIC>IMPERIAL  ");
+            cfa634_print(">3.IMPERIAL>METRIC  ");
             break;
         case 4:
             setcursor(0, 0);
@@ -630,6 +644,9 @@ void read_btn() {
             if (menu_index == 6) SpoolDiameter = last_SpoolDiameter;
             in_submenu = false;  
             settingsdisplay(menu_index);  // Exit submenu with saving
+        } else if (menu_index ==1){
+            in_submenu = false;
+            settingsdisplay(menu_index); 
         } else if (menu_index == 3) {  
             isImperial = false;  // change to metric
         } else if (menu_index == 7){
@@ -658,7 +675,8 @@ void read_btn() {
             in_submenu = false;  
             settingsdisplay(menu_index);  
         } else if (menu_index == 1) {
-            rotations = 0;
+            in_submenu = false;
+            settingsdisplay(menu_index); 
         } else if (menu_index == 3) {  
             isImperial = true;  
         } else if (menu_index == 7){
@@ -749,6 +767,9 @@ void encoder_isr(uint gpio, uint32_t events) {
             } else if (menu_index == 6 && SpoolDiameter < 99) {
                 //SpoolDiameter = last_SpoolDiameter;
                 SpoolDiameter++;
+            } else if (menu_index == 8 && alarmsensitivity < 10) {
+                alarmsensitivity++;
+                alarmsen = true;
             } else if (menu_index == 7) {
                 // Update only the variable corresponding to Position1
                 for (int i = 1; i < 15; i++) {
@@ -790,6 +811,9 @@ void encoder_isr(uint gpio, uint32_t events) {
             } else if (menu_index == 6 && SpoolDiameter > 0) {
                 SpoolDiameter = last_SpoolDiameter;
                 SpoolDiameter--;
+            } else if (menu_index == 8 && alarmsensitivity > 1) {
+                alarmsensitivity--;
+                alarmsen = true;
             } else if (menu_index == 7) {
                 // Update only the variable corresponding to Position1
                 for (int i = 1; i < 15; i++) {
@@ -919,9 +943,9 @@ void screen_update(int linelength, int dragset) {
             cfa634_main(linelength, dragset);
         } else if(ISPOS0 == false) {
             setcursor(0, 0);
-            cfa634_print("     SET DRAG TO    ");
+            cfa634_print("  SET DRAG POS AND  ");
             setcursor(0, 1);
-            cfa634_print("     POSITION 0     ");
+            cfa634_print("   SPEED CTRL TO 0  ");
             setcursor(0, 2);
             cfa634_print("    LEFT OR RIGHT   ");
             setcursor(0, 3);
@@ -952,6 +976,9 @@ void screen_update(int linelength, int dragset) {
                     RecalibrateDrag(Position1);
                     printf("Position 1 %d\n", Position1);
                     DragNext = false;
+                } else if (menu_index == 8 && alarmsen) {
+                    selectedmenudisplay(menu_index);
+                    alarmsen = false;
                 }
             }
         } else {

@@ -52,8 +52,10 @@ extern volatile int Position2[16];
 extern volatile int AutoStopLen;
 extern volatile int SpoolDiameter;
 extern int count_drag;
-extern int alarm_sensitivity;
-extern int rotations;
+extern volatile bool linereset;
+//extern int alarmsensitivity;
+
+
 
 // Define min and max duty cycle limits (default values)
 volatile uint16_t min_duty = 0; // 0% duty cycle
@@ -63,7 +65,7 @@ volatile int length = 0;
 volatile int drag = 0;
 //volatile int Position[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80};
 int count = 0;
-//int rotations = 0;
+int rotations = 0;
 //int count_drag = 0;
 int oldVal = 0;
 int newVal = 0;
@@ -142,7 +144,7 @@ void set_pwm_duty(uint16_t duty_cycle) {
 
     uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
     uint16_t adc_threshold = (activation_threshold * PWM_RESOLUTION) / 100; //
-    printf("Duty Cycle: %u, ADC Threshold: %u, MinSpeed: %d, MaxSpeed: %d, Mobile Motor Control: %d\n", duty_cycle, adc_threshold, MinSpeed, MaxSpeed, mobile_motor_control);
+    //printf("Duty Cycle: %u, ADC Threshold: %u, MinSpeed: %d, MaxSpeed: %d, Mobile Motor Control: %d\n", duty_cycle, adc_threshold, MinSpeed, MaxSpeed, mobile_motor_control);
     if (duty_cycle < adc_threshold) {
         pwm_set_chan_level(slice_num, pwm_gpio_to_channel(PWM_PIN), 0);
         return;
@@ -277,10 +279,9 @@ int main() {
     // Initialize Buzzer as Output
     gpio_init(BUZZER_PIN);
     gpio_set_dir(BUZZER_PIN, GPIO_OUT);
-
     double Dmax = SpoolDiameter/10;
     double Dmin = 2.00;
-    //int rotations = 0;
+    int rotations = 0;
     int count = 0;
     //int count_drag = 0;
     int oldVal = 0;
@@ -291,7 +292,7 @@ int main() {
     int button = 0;
     int reg_count = 0;
 
-    //int alarm_sensitivity = 1; // Length in units to trigger the alarm
+    int alarm_sensitivity = 1; // Length in units to trigger the alarm
     int alarm_progress = 0; // Progress towards the alarm trigger
     int alarm_trigger = 0; // Holds value of length when sensitivity is tested
 
@@ -299,6 +300,7 @@ int main() {
         if (line_length - auto_stop_length <= 0) { 
             reg = true; // Reenable alarm after fish is reeled in
         }
+        
         /*if (gpio_get(15) == 1){ // If button is pressed, reset drag count
             count_drag = 0;
             drag = 0;
@@ -342,6 +344,11 @@ int main() {
         Old_Length = line_length;
         // Update rotation count and calculate line length
         //printf("New Encoder Value: %d, Old Value: %d\n", newVal, oldVal);
+        /*
+         if (linereset = true){
+                rotations = 0;
+                linereset = false;
+            }*/
         if (newVal != oldVal) { 
              if (oldVal == 11) {
                  if (newVal == 10) {
@@ -376,11 +383,11 @@ int main() {
                      count++;
                  }
              } 
-             if (count==1058){
+             if (count==173){
                  rotations++;
                  count = 0; 
              }
-             if (count == -1058){  
+             if (count == -173){  
                  --rotations;
                  count = 0;        
              }
@@ -389,6 +396,7 @@ int main() {
                  line_length = length;
                  //printf("Reel Line Length: %d\n", length);
              }
+            
          }
          oldVal = newVal;
         New_Length = line_length;
