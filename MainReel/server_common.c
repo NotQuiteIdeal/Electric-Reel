@@ -43,7 +43,7 @@ volatile uint16_t drag_set = 0;
 volatile uint8_t motor_status = 0;
 volatile uint8_t motor_speed = 0;
 volatile uint8_t fish_alarm = 0;
-volatile uint8_t auto_stop_length = 0;
+volatile uint8_t auto_stop_length = 5;
 volatile uint8_t measurement_system = 0;
 
 // Variables for testing ping

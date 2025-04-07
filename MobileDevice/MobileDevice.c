@@ -365,7 +365,7 @@ float get_battery_voltage() {
             lcd_send_data(0);               // Print the custom character stored in slot 0
          }
      } else {
-         int remaining = FULL_REEL_LENGTH - stop_length; // Remaining reel length.
+         int remaining = FULL_REEL_LENGTH; // Remaining reel length. (Removed - stop_length)
          printf("Remaining: %d, FULL_REEL_LENGTH: %d, stop_length: %d\n", remaining, FULL_REEL_LENGTH, stop_length);
          char line1[21], line2[21], line3[21];
          snprintf(line1, sizeof(line1), "MAIN SCREEN");

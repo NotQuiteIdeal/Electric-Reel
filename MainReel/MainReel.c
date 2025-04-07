@@ -53,8 +53,7 @@ extern volatile int AutoStopLen;
 extern volatile int SpoolDiameter;
 extern int count_drag;
 extern volatile bool linereset;
-//extern int alarmsensitivity;
-
+extern volatile int alarmsensitivity;
 
 
 // Define min and max duty cycle limits (default values)
@@ -227,6 +226,10 @@ void core1() {
         uint16_t pot_value = read_potentiometer();
         duty_cycle_test = (pot_value * PWM_RESOLUTION) / 4095; // Scale to 16-bit
 
+        if (duty_cycle_test > 1000) {
+            in_settings_menu = false; // Exits settings menu
+        }
+
         if (mobile_motor_control == 0 || duty_cycle_test > 1000 || in_settings_menu == true) { // Tests if reel is control 
             duty_cycle = duty_cycle_test;
         } else {
@@ -292,7 +295,6 @@ int main() {
     int button = 0;
     int reg_count = 0;
 
-    int alarm_sensitivity = 1; // Length in units to trigger the alarm
     int alarm_progress = 0; // Progress towards the alarm trigger
     int alarm_trigger = 0; // Holds value of length when sensitivity is tested
 
@@ -460,21 +462,32 @@ int main() {
             if (reg_count >= 600000) {
                 reg_count = 0; // Reset counter after toggling
                 reg = !reg;
-                //printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
+                printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
             }
         }
+        
         // Buzzer Logic
         if (reg && drag != 0 && New_Length > Old_Length) {
-            if (alarm_trigger == 0) alarm_trigger = Old_Length;
-            if (New_Length - alarm_trigger >= alarm_sensitivity) fish_alarm = 1;
+            //if (alarm_trigger == 0) alarm_trigger = Old_Length, printf("resetting alarm trigger length\n");
+            //if (New_Length - alarm_trigger >= alarmsensitivity) fish_alarm = 1, alarm_trigger = 1, printf("Trigger latched\n");
             //fish_alarm = 1; RE-ENABLE TO REMOVE ALARM SENSITIVITY
             //printf("Fish alarm on!\n");
+            if (fish_alarm == 0) alarm_trigger++, printf("Incrementing Alarm Trigger!\n");
+            printf("Alarm sensitivity: %d, Alarm Trigger: %d, reg: %d, New Length: %d, Old Length: %d, Fish Alarm: %d\n", alarmsensitivity, alarm_trigger, reg, New_Length, Old_Length, fish_alarm);
+            if (alarm_trigger >= alarmsensitivity) {
+                printf("Activating alarm...\n");
+                fish_alarm = 1;
+                alarm_trigger = 0;
+            }
+            
         } else if (reg && drag != 0 && New_Length == Old_Length && fish_alarm == 1) {
             fish_alarm = 1;
-            //rintf("Fish alarm still on!\n");
+            printf("Fish alarm still on!\n");
         } else {
+            if (fish_alarm == 1) printf("Releasing trigger\n");
             fish_alarm = 0;
-            alarm_trigger = 0; // Reset the alarm trigger when reel is engaged or drag is 0
+            //alarm_trigger = 0; // Reset the alarm trigger when reel is engaged or drag is 0
+        
         }
         gpio_put(BUZZER_PIN, fish_alarm);
      } 

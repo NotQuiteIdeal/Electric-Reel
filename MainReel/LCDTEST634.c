@@ -35,7 +35,7 @@ volatile bool ignore_next_press = false; // ingore if less than that time and no
 volatile bool in_submenu = false; // stores if in submen
 volatile int selected_digit = 1; // which digit the cursors is on
 volatile bool isImperial = true; //false = metric, true = imperial
-volatile int AutoStopLen = 10;     // Store value for setting
+volatile int AutoStopLen = 5;     // Store value for setting
 volatile int MaxSpeed = 70;        // Store value for setting
 volatile int MinSpeed = 10;        // Store value for setting
 volatile int SpoolDiameter = 37;   // Store value for setting
@@ -50,7 +50,7 @@ volatile bool encoder_btpress = false; // store if encoder is pressed
 volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
-volatile int last_AutoStopLen = 10; // previous value next 4
+volatile int last_AutoStopLen = 5; // previous value next 4
 volatile int last_MaxSpeed = 70;
 volatile int last_MinSpeed = 10;
 volatile int last_SpoolDiameter = 37;
@@ -63,7 +63,7 @@ volatile int Position2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76
 volatile int lastPosition2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76, 80, 84}; // drag recalibration 
 volatile bool DragNext = false; // flag to determine to go to next drag
 volatile bool ISPOS0 = false; // False means it is not and true means it is
-int alarmsensitivity = 1;
+volatile int alarmsensitivity = 3;
 //int rotations = 0;
 volatile bool alarmsen = false;
 volatile bool linereset = false;
@@ -87,6 +87,7 @@ extern uint8_t fish_alarm;
 extern uint8_t ping_test_status;
 extern uint8_t measurement_system;
 extern uint8_t auto_stop_length;
+extern volatile int length;
 
 
 // Function to send a command to the LCD
@@ -556,8 +557,12 @@ void cfa634_main(int line, int drag) {
         //cfa634_clear_screen(); // Clear the display
         setcursor(0, 0);
         cfa634_print("       MAIN         "); // Display "MAIN" on the first line
-        setcursor(0, 1);
         // Format and display the line length in feet
+        setcursor(0, 1);
+        char formattedline[20];
+        sprintf(formattedline, "   LINE: %04d FEET  ", line);
+        cfa634_print(formattedline);
+        /*
         if (line < 10) { // If line is a single digit
             char formattedline[20];
             sprintf(formattedline, "  LINE: 000%d FEET   ", line);
@@ -574,28 +579,34 @@ void cfa634_main(int line, int drag) {
             char formattedline[20];
             sprintf(formattedline, "  LINE: %d FEET   ", line);
             cfa634_print(formattedline);
-        }
+        }*/
+        
         setcursor(0, 2);
+        char formatteddrag[20];
+        sprintf(formatteddrag, "   DRAG: %03d LBS    ", drag);
+        cfa634_print(formatteddrag);
         // Format and display the drag in foot-pounds
+        /*
         if (drag < 10) { // If drag is a single digit
             char formatteddrag[20];
-            sprintf(formatteddrag, "  DRAG: 00%d FT-LBS  ", drag);
+            sprintf(formatteddrag, "   DRAG: 00%d LBS   ", drag);
             cfa634_print(formatteddrag);
         } else if (drag < 100) { // If drag is two digits
             char formatteddrag[20];
-            sprintf(formatteddrag, "  DRAG: 0%d FT-LBS  ", drag);
+            sprintf(formatteddrag, "   DRAG: 0%d LBS    ", drag);
             cfa634_print(formatteddrag);
         } else { // If drag is three digits or more
             char formatteddrag[20];
-            sprintf(formatteddrag, "  DRAG: %d FT-LBS  ", drag);
+            sprintf(formatteddrag, "   DRAG: %d LBS     ", drag);
             cfa634_print(formatteddrag);
-        }
+        }*/
+
         setcursor(0, 3);
         cfa634_print("                    "); // Empty line for spacing
     } else if (!isImperial) { // If the current measurement system is metric
         // Convert line and drag to metric units
         uplinecon = line * 0.3048; // Convert feet to meters
-        updragcon = drag * 1.3558179483; // Convert foot-pounds to newton-meters
+        updragcon = drag * 0.453592; // Convert foot-pounds to newton-meters
         linecon = (int)round(uplinecon);
         dragcon = (int)round(updragcon);
         //cfa634_clear_screen(); // Clear the display
@@ -609,7 +620,7 @@ void cfa634_main(int line, int drag) {
         // Format and display the drag in newton-meters
         setcursor(0, 2);
         char formatteddrag[21];
-        sprintf(formatteddrag, "   DRAG: %03d NM     ", dragcon); 
+        sprintf(formatteddrag, "   DRAG: %03d KG     ", dragcon); 
         cfa634_print(formatteddrag);        // Display Drag value from 0-999 in newton-meters
         setcursor(0, 3);
         cfa634_print("                    "); // Empty line for spacing
@@ -675,6 +686,7 @@ void read_btn() {
             in_submenu = false;  
             settingsdisplay(menu_index);  
         } else if (menu_index == 1) {
+            length = 0;
             in_submenu = false;
             settingsdisplay(menu_index); 
         } else if (menu_index == 3) {  
