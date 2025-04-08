@@ -351,12 +351,12 @@ float get_battery_voltage() {
  void display_main_screen(void) {
      lcd_send_command(0x01); // Clear display.
      if (metric_mode) {
-         float meters = stop_length * 0.3048f;   // Convert feet to meters.
-         float drag_metric = drag_value * 1.36f;   // Convert ft-lbs to N·m (approximate factor).
+         float meters = line_length * 0.3048f;   // Convert feet to meters.
+         float drag_metric = drag_value * 0.453592f;   // Convert ft-lbs to N·m (approximate factor).
          char line1[21], line2[21], line3[21];
          snprintf(line1, sizeof(line1), "MAIN SCREEN");
          snprintf(line2, sizeof(line2), "%.1f METERS", meters);
-         snprintf(line3, sizeof(line3), "%.1f N M", drag_metric);
+         snprintf(line3, sizeof(line3), "%.1f KG", drag_metric);
          lcd_print_centered(line1, 1);
          lcd_print_centered(line2, 2);
          lcd_print_centered(line3, 3);
@@ -370,7 +370,7 @@ float get_battery_voltage() {
          char line1[21], line2[21], line3[21];
          snprintf(line1, sizeof(line1), "MAIN SCREEN");
          snprintf(line2, sizeof(line2), "%03d FEET", remaining);
-         snprintf(line3, sizeof(line3), "%.0f FT LBS", drag_value);
+         snprintf(line3, sizeof(line3), "%.0f LBS", drag_value);
          lcd_print_centered(line1, 1);
          lcd_print_centered(line2, 2);
          lcd_print_centered(line3, 3);
@@ -1095,12 +1095,14 @@ void BT_Core(void) {
      display_main_screen();
      update_battery_icon();
      create_bluetooth_char();
+     
      while (1) {
-        metric_mode = (measurement_system == 1);
+        
         stop_length = auto_stop_length;
          // If not in settings mode, check for a long press to enter settings.
          //printf("Temp Auto Stop: %d, Auto Stop (Client): %d, Auto Stop (Server): %d\n", temp_stop_length, stop_length, auto_stop_length);
          if (!in_settings_menu) {
+            metric_mode = (measurement_system == 1);
              check_button_long_press();
              if (connection_status == 1 && fart == 0) (display_main_screen(), fart = 1);
              if (FULL_REEL_LENGTH != line_length) {

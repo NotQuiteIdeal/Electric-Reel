@@ -35,6 +35,7 @@ extern uint8_t motor_speed;
 extern uint8_t fish_alarm;
 extern uint8_t ping_test_status;
 extern uint8_t auto_stop_length;
+extern uint8_t measurement_system;
 extern int ping_rate_count;
 volatile int mobile_motor_control = 0; // 0 is no, 1 is yes
 bool ping_start = false;
@@ -54,6 +55,7 @@ extern volatile int SpoolDiameter;
 extern int count_drag;
 extern volatile bool linereset;
 extern volatile int alarmsensitivity;
+extern volatile bool isImperial;
 
 
 // Define min and max duty cycle limits (default values)
@@ -64,7 +66,7 @@ volatile int length = 0;
 volatile int drag = 0;
 //volatile int Position[16] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 65, 70, 75, 80};
 int count = 0;
-int rotations = 0;
+volatile int rotations = 0;
 //int count_drag = 0;
 int oldVal = 0;
 int newVal = 0;
@@ -136,10 +138,10 @@ void set_pwm_duty(uint16_t duty_cycle) {
         pwm_set_chan_level(pwm_gpio_to_slice_num(PWM_PIN), pwm_gpio_to_channel(PWM_PIN), 0); // Stops motor if there is no more line
         return;
     }
-    int activation_threshold = 20;
+    int activation_threshold = 5;
     // Temporary min/max speed init
-    MinSpeed = 20;
-    MaxSpeed = 100;
+    //MinSpeed = 5;
+    //MaxSpeed = 100;
 
     uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
     uint16_t adc_threshold = (activation_threshold * PWM_RESOLUTION) / 100; //
@@ -248,6 +250,8 @@ void core1() {
         // Uncomment this line to change limits dynamically during execution
         // update_limits(20000, 45000);
         AutoStopLen = auto_stop_length;
+        isImperial = (measurement_system == 0);
+        if (!isImperial) printf("Metric Toggled\n");
         screen_update(length, drag);
     }
 }
@@ -284,7 +288,7 @@ int main() {
     gpio_set_dir(BUZZER_PIN, GPIO_OUT);
     double Dmax = SpoolDiameter/10;
     double Dmin = 2.00;
-    int rotations = 0;
+    //int rotations = 0;
     int count = 0;
     //int count_drag = 0;
     int oldVal = 0;
@@ -385,11 +389,11 @@ int main() {
                      count++;
                  }
              } 
-             if (count==173){
+             if (count==166){
                  rotations++;
                  count = 0; 
              }
-             if (count == -173){  
+             if (count == -166){  
                  --rotations;
                  count = 0;        
              }
@@ -403,7 +407,7 @@ int main() {
          oldVal = newVal;
         New_Length = line_length;
         //printf("Line Length: %d\n", line_length);
-        //printf("Count: %d, Rotations: %d, Length: %d\n", count, rotations, length);
+        printf("Count: %d, Rotations: %d, Length: %d\n", count, rotations, length);
         
         // Update drag count based on encoder
          if (newValdrag != oldValdrag) {
@@ -473,16 +477,16 @@ int main() {
             //fish_alarm = 1; RE-ENABLE TO REMOVE ALARM SENSITIVITY
             //printf("Fish alarm on!\n");
             if (fish_alarm == 0) alarm_trigger++, printf("Incrementing Alarm Trigger!\n");
-            printf("Alarm sensitivity: %d, Alarm Trigger: %d, reg: %d, New Length: %d, Old Length: %d, Fish Alarm: %d\n", alarmsensitivity, alarm_trigger, reg, New_Length, Old_Length, fish_alarm);
+            //printf("Alarm sensitivity: %d, Alarm Trigger: %d, reg: %d, New Length: %d, Old Length: %d, Fish Alarm: %d\n", alarmsensitivity, alarm_trigger, reg, New_Length, Old_Length, fish_alarm);
             if (alarm_trigger >= alarmsensitivity) {
-                printf("Activating alarm...\n");
+                //printf("Activating alarm...\n");
                 fish_alarm = 1;
                 alarm_trigger = 0;
             }
             
         } else if (reg && drag != 0 && New_Length == Old_Length && fish_alarm == 1) {
             fish_alarm = 1;
-            printf("Fish alarm still on!\n");
+            //printf("Fish alarm still on!\n");
         } else {
             if (fish_alarm == 1) printf("Releasing trigger\n");
             fish_alarm = 0;

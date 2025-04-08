@@ -277,7 +277,7 @@ int att_write_callback(hci_con_handle_t connection_handle, uint16_t attribute_ha
     if (attribute_handle == MEASUREMENT_SYSTEM_VALUE_HANDLE) {
         if (buffer_size == 1) {
             measurement_system = buffer[0];
-            //printf("Received measurement system: %d\n", measurement_system);
+            printf("Received measurement system: %d\n", measurement_system);
             if (measurement_system == 0) {
                 isImperial = true;
             } else {

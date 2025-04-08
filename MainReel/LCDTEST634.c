@@ -36,8 +36,8 @@ volatile bool in_submenu = false; // stores if in submen
 volatile int selected_digit = 1; // which digit the cursors is on
 volatile bool isImperial = true; //false = metric, true = imperial
 volatile int AutoStopLen = 5;     // Store value for setting
-volatile int MaxSpeed = 70;        // Store value for setting
-volatile int MinSpeed = 10;        // Store value for setting
+volatile int MaxSpeed = 100;        // Store value for setting
+volatile int MinSpeed = 5;        // Store value for setting
 volatile int SpoolDiameter = 37;   // Store value for setting
 volatile int selected_menu = 0; // which menu_index is selected
 volatile bool right_pressed = false; // store if right button is pressed
@@ -51,19 +51,19 @@ volatile bool long_press = false; // check if long press
 volatile bool update_display = true; // sets flag to true until 
 volatile bool value_changed = false; // Track if any value has changed
 volatile int last_AutoStopLen = 5; // previous value next 4
-volatile int last_MaxSpeed = 70;
-volatile int last_MinSpeed = 10;
+volatile int last_MaxSpeed = 100;
+volatile int last_MinSpeed = 5;
 volatile int last_SpoolDiameter = 37;
 volatile double SDia = 0.0; // used for calculating spool diameter to decimal to 1
 volatile bool update_screen = false; // flag to determine to update screen
 volatile int LineLength = 0;
 volatile int Position1 = 1; // position for sorting through recal drag
 volatile bool Pos0 = false; // flag to tell to go to recal drag call function
-volatile int Position2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76, 80, 84}; // drag recalibration and display
-volatile int lastPosition2[16] = {0, 1, 2, 4, 10, 20, 27, 36, 45, 58, 68, 70, 72, 76, 80, 84}; // drag recalibration 
+volatile int Position2[16] = {0, 0, 1, 1, 4, 5, 10, 20, 28, 28, 33, 50, 64, 66, 74, 74}; // drag recalibration and display
+volatile int lastPosition2[16] = {0, 0, 1, 1, 4, 5, 10, 20, 28, 28, 33, 50, 64, 66, 74, 74}; // drag recalibration 
 volatile bool DragNext = false; // flag to determine to go to next drag
 volatile bool ISPOS0 = false; // False means it is not and true means it is
-volatile int alarmsensitivity = 3;
+volatile int alarmsensitivity = 1;
 //int rotations = 0;
 volatile bool alarmsen = false;
 volatile bool linereset = false;
@@ -88,6 +88,7 @@ extern uint8_t ping_test_status;
 extern uint8_t measurement_system;
 extern uint8_t auto_stop_length;
 extern volatile int length;
+extern volatile int rotations;
 
 
 // Function to send a command to the LCD
@@ -686,7 +687,7 @@ void read_btn() {
             in_submenu = false;  
             settingsdisplay(menu_index);  
         } else if (menu_index == 1) {
-            length = 0;
+            rotations = 0;
             in_submenu = false;
             settingsdisplay(menu_index); 
         } else if (menu_index == 3) {  
