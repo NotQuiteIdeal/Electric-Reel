@@ -70,6 +70,7 @@ volatile int rotations = 0;
 //int count_drag = 0;
 int oldVal = 0;
 int newVal = 0;
+volatile bool reg = true;
 
 // Function to calculate the length based on encoder rotations
 int calculate_length(double Dmax, double Dmin, double rotations)
@@ -221,6 +222,14 @@ void core1() {
     uint16_t duty_cycle = 0;
     uint16_t duty_cycle_test = 0;
 
+    const int B1_PIN = 6;
+    const int B2_PIN = 7;
+    // Initialize Buttons as Inputs (Active High)
+    gpio_init(B1_PIN);
+    gpio_set_dir(B1_PIN, GPIO_IN);
+    gpio_init(B2_PIN);
+    gpio_set_dir(B2_PIN, GPIO_IN);
+
     while (true) {
         
         
@@ -253,6 +262,22 @@ void core1() {
         isImperial = (measurement_system == 0);
         if (!isImperial) printf("Metric Toggled\n");
         screen_update(length, drag);
+
+
+         // Check Buzzer
+        // Read buttons (Active High: 1 when pressed, 0 when not pressed)
+        int B1 = gpio_get(B1_PIN);  
+        int B2 = gpio_get(B2_PIN);
+        // Toggle reg only when both buttons are pressed (Turns fish alarm functionality on/off)
+        if (B1 == 1 && B2 ==1) { 
+            reg = !reg; // Toggle fish alarm
+            printf("Fish alarm toggled: %d\n", reg);
+            while (B1 == 1 && B2 == 1) {
+                B1 = gpio_get(B1_PIN);  
+                B2 = gpio_get(B2_PIN);
+            }
+        }
+        
     }
 }
 
@@ -271,17 +296,10 @@ int main() {
 
     int New_Length = 0; //Change to new line count
     int Old_Length = 0; //Change to Old line count
-    bool reg = true;
-    // Define GPIO pins
-    const int B1_PIN = 6;
-    const int B2_PIN = 7;
-    const int BUZZER_PIN = 8;  // Now used for a buzzer instead of an LED
     
-    // Initialize Buttons as Inputs (Active High)
-    gpio_init(B1_PIN);
-    gpio_set_dir(B1_PIN, GPIO_IN);
-    gpio_init(B2_PIN);
-    gpio_set_dir(B2_PIN, GPIO_IN);
+    // Define GPIO pins
+    
+    const int BUZZER_PIN = 8;  // Now used for a buzzer instead of an LED
     
     // Initialize Buzzer as Output
     gpio_init(BUZZER_PIN);
@@ -407,7 +425,7 @@ int main() {
          oldVal = newVal;
         New_Length = line_length;
         //printf("Line Length: %d\n", line_length);
-        printf("Count: %d, Rotations: %d, Length: %d\n", count, rotations, length);
+        //printf("Count: %d, Rotations: %d, Length: %d\n", count, rotations, length);
         
         // Update drag count based on encoder
          if (newValdrag != oldValdrag) {
@@ -456,20 +474,6 @@ int main() {
         oldValdrag = newValdrag;
          //Clears queue and updates length value for core1    
 
-         // Check Buzzer
-        // Read buttons (Active High: 1 when pressed, 0 when not pressed)
-        int B1 = gpio_get(B1_PIN);  
-        int B2 = gpio_get(B2_PIN);
-        // Toggle reg only when both buttons are pressed (Turns fish alarm functionality on/off)
-        if (B1 == 1 && B2 ==1) { //THIS IS FOR MULTIPLE INPUTS
-            reg_count++; // Debouncer without slowing code down
-            if (reg_count >= 600000) {
-                reg_count = 0; // Reset counter after toggling
-                reg = !reg;
-                printf("Fish alarm toggled: %s\n", reg ? "ON" : "OFF");
-            }
-        }
-        
         // Buzzer Logic
         if (reg && drag != 0 && New_Length > Old_Length) {
             //if (alarm_trigger == 0) alarm_trigger = Old_Length, printf("resetting alarm trigger length\n");
