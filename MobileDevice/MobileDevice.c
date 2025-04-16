@@ -99,8 +99,8 @@
  // The contrast setting is mapped such that the PWM (before the resistor) produces a voltage 
  // that, after a 0.6 V drop, will be in the range of ~2.0 V to 2.4 V.
  // For brightness, the full 0–100% PWM range is used.
- #define CONTRAST_PWM_PIN    21
- #define BRIGHTNESS_PWM_PIN  22
+ #define CONTRAST_PWM_PIN    20
+ #define BRIGHTNESS_PWM_PIN  8
  
  // New global variables for contrast and brightness (0–100%).
  int contrast_value = 50;    // Default 50% --> After mapping, output voltage ~? (see math below)
@@ -111,21 +111,21 @@
  // =========================
  
  // Define battery life indicator pin
- #define BATTERY_ADC_PIN 26  // GPIO26 (ADC0)
+ #define BATTERY_ADC_PIN 26  //GPIO26 (ADC0)
  // Voltage divider ratio (for 100kΩ & 47kΩ)
  #define VOLTAGE_DIVIDER_RATIO 3.13  // Approximate ratio
 
  // GPIO Pins for charger status
- #define CHARGER_STAT1 0  // Status 1 (STAT1)
- #define CHARGER_STAT2 1  // Status 2 (STAT2)
+ #define CHARGER_STAT1 13  // Status 1 (STAT1)
+ #define CHARGER_STAT2 12  // Status 2 (STAT2)
 
 // Battery Voltage to Percentage Mapping (LiPo Approximation)
 int battery_percentage(float voltage) {
-    if (voltage >= 4.2) return 100;  // Fully charged
-    if (voltage >= 3.85) return 75 + ((voltage - 3.85) / 0.35) * 25;
-    if (voltage >= 3.7) return 50 + ((voltage - 3.7) / 0.15) * 25;
-    if (voltage >= 3.5) return 25 + ((voltage - 3.5) / 0.2) * 25;
-    if (voltage >= 3.2) return ((voltage - 3.2) / 0.3) * 25;
+    if (voltage >= 3.2) return 100;  // Fully charged
+    if (voltage >= 2.85) return 75 + ((voltage - 2.85) / 0.35) * 25;
+    if (voltage >= 2.7) return 50 + ((voltage - 2.7) / 0.15) * 25;
+    if (voltage >= 2.5) return 25 + ((voltage - 2.5) / 0.2) * 25;
+    if (voltage >= 2.2) return ((voltage - 2.2) / 0.3) * 25;
     return 0;  // Battery low
 }
 
@@ -141,26 +141,34 @@ float get_battery_voltage() {
 // #define FULL_REEL_LENGTH 200
  
  // === LCD Pin Definitions === //
- #define PIN_RS  17    // Register Select: low for command, high for data.
- #define PIN_RW  19    // Read/Write: low for write.
- #define PIN_E   18    // Enable: triggers data read/write on falling edge.
- #define PIN_RES 20    // Reset pin for the LCD module.
+ #define PIN_RS  22    // Register Select: low for command, high for data.
+ #define PIN_RW  27    // Read/Write: low for write.
+ #define PIN_E   28    // Enable: triggers data read/write on falling edge.
+ #define PIN_RES 21    // Reset pin for the LCD module.
  
  // 8-bit Data Bus for LCD: These GPIO pins connect to D0-D7 of the LCD.
- const int data_pins[8] = {16, 3, 4, 5, 6, 7, 8, 9};
+ const int data_pins[8] = {0, 1, 2, 3, 4, 5, 6, 7};
  
  // Rotary Encoder Pins (using a Bourns PEC11 encoder).
+ /*
  #define ENCODER_A   10  // Encoder channel A.
  #define ENCODER_B   11  // Encoder channel B.
  #define ENCODER_BTN 12  // Encoder push-button (active low).
- 
+ */
+ #define ENCODER_A   11  // Encoder channel A.
+ #define ENCODER_B   10  // Encoder channel B.
+ #define ENCODER_BTN 9  // Encoder push-button (active low).
  // Additional Button and LED Pins.
- #define BUTTON_26 2  // Fish biting simulator.
- #define BUTTON_14 14  // Mute button.
- #define BUTTON_15 15  // Reel-Up button.
- #define LED_28    28  // Alarm LED.
- #define LED_13    13  // Alarm buzzer.
- #define LED_27    27  // Reel-Up LED indicator.
+ //#define BUTTON_26 2  // Fish biting simulator.
+ //#define BUTTON_14 14  // Mute button.
+ #define BUTTON_14 16
+ //#define BUTTON_15 15  // Reel-Up button.
+ #define BUTTON_15 17
+ //#define LED_28    28  // Alarm LED.
+ #define LED_28    18
+ //#define LED_13    13  // Alarm buzzer.
+ #define LED_13    19
+ //#define LED_27    27  // Reel-Up LED indicator.
  
  // Global variables used for navigation and settings.
  volatile int menu_index = 0;            // Index for the currently selected menu item.
@@ -920,7 +928,7 @@ void create_bluetooth_char(void) {
              button_15_press_time = to_ms_since_boot(get_absolute_time());
              write_fish_alarm(0);
          } else if (to_ms_since_boot(get_absolute_time()) - button_15_press_time > 3000 && !led_27_on) {
-             gpio_put(LED_27, 1);
+             //gpio_put(LED_27, 1);
              update_icon(0x0C, ICON_BLINK);
              led_27_on = true;
              button_15_released = false;
@@ -930,7 +938,7 @@ void create_bluetooth_char(void) {
      } else {
          if (button_15_press_time > 0) {
              if (!led_27_on) {
-                 gpio_put(LED_27, 0);
+                 //gpio_put(LED_27, 0);
                  update_icon(0x0C, ICON_CLEAR);
                  // Stops the motor
                  write_motor_speed(0);
@@ -1007,9 +1015,9 @@ void create_bluetooth_char(void) {
      gpio_init(LED_13);
      gpio_set_dir(LED_13, GPIO_OUT);
      gpio_put(LED_13, 0);
-     gpio_init(LED_27);
-     gpio_set_dir(LED_27, GPIO_OUT);
-     gpio_put(LED_27, 0);
+     //gpio_init(LED_27);
+     //gpio_set_dir(LED_27, GPIO_OUT);
+     //gpio_put(LED_27, 0);
 
      // Initialize GPIO0 and GPIO1 as input for charger detection
      gpio_init(CHARGER_STAT1);
