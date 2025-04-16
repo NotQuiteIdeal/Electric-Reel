@@ -905,13 +905,13 @@ void create_bluetooth_char(void) {
  // BUTTON_26 and BUTTON_14 control LED_28 and BUZZER_13.
  // BUTTON_15 controls LED_27.
  void handle_buttons(void) {
-     if (gpio_get(BUTTON_26)) {
+     /*if (gpio_get(BUTTON_26)) {
          update_icon(1, ICON_SOLID);
          if (alarm_enabled) {
              gpio_put(LED_13, 1);
              gpio_put(LED_28, 1);
          }
-     }
+     }*/
      if (gpio_get(BUTTON_14)) {
          gpio_put(LED_28, 0);
          gpio_put(LED_13, 0);
@@ -998,9 +998,9 @@ void create_bluetooth_char(void) {
      pwm_set_enabled(slice_brightness, true);
      
      // Additional buttons.
-     gpio_init(BUTTON_26);
-     gpio_set_dir(BUTTON_26, GPIO_IN);
-     gpio_pull_down(BUTTON_26);
+     //gpio_init(BUTTON_26);
+     //gpio_set_dir(BUTTON_26, GPIO_IN);
+     //gpio_pull_down(BUTTON_26);
      gpio_init(BUTTON_14);
      gpio_set_dir(BUTTON_14, GPIO_IN);
      gpio_pull_down(BUTTON_14);

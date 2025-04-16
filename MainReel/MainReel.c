@@ -253,7 +253,7 @@ void core1() {
         // Print values
         float voltage = pot_value * (3.3f / 4095.0f);
         float duty_percent = (duty_cycle * 100.0f) / PWM_RESOLUTION;
-        //printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
+        printf("ADC: %u, Voltage: %.2fV, Duty Cycle: %.2f%%\n", pot_value, voltage, duty_percent);
 
         // Example: Dynamically update limits (could be triggered by a button/UART)
         // Uncomment this line to change limits dynamically during execution
