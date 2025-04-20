@@ -12,11 +12,11 @@
 #define SCL_PIN 5 // i2c clock
 #define CFA634_I2C_ADDR 0x42  // I2C address (7-bit format)
 #define MAX_LINE_LENGTH 20  // Max characters per line
-#define ENCODER_A 0 // encoder a side
-#define ENCODER_B 1 // encoder b side
+#define ENCODER_A 1 // encoder a side [0]
+#define ENCODER_B 0 // encoder b side [1]
 #define ENCODER_BTN 2 // encoder button
-#define RBTN 7 // right button
-#define LBTN 6 // left button
+#define RBTN 6 // right button [7]
+#define LBTN 7 // left button [6]
 #define PULSES_PER_UPDATE 2  // Update after every 4 pulses
 #define DEBOUNCE_TIME_MS 35     // Short pause to allow proper pulse registration (in milliseconds)
  // Store previous values for menus
