@@ -155,8 +155,8 @@ float get_battery_voltage() {
  #define ENCODER_B   11  // Encoder channel B.
  #define ENCODER_BTN 12  // Encoder push-button (active low).
  */
- #define ENCODER_A   11  // Encoder channel A.
- #define ENCODER_B   10  // Encoder channel B.
+ #define ENCODER_A   10  // Encoder channel A.
+ #define ENCODER_B   11  // Encoder channel B.
  #define ENCODER_BTN 9  // Encoder push-button (active low).
  // Additional Button and LED Pins.
  //#define BUTTON_26 2  // Fish biting simulator.

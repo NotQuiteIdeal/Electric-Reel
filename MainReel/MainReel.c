@@ -333,8 +333,8 @@ int main() {
         //printf("%d\n", count_drag);
         int chanA = gpio_get(11); // Read encoder channels for rotation count
         int chanB = gpio_get(10);
-        int chanDragA = gpio_get(15); // Read encoder channels for drag count
-        int chanDragB = gpio_get(14);
+        int chanDragA = gpio_get(14); // Read encoder channels for drag count
+        int chanDragB = gpio_get(15);
 
         // Update rotation count based on encoder signals
         if (chanA == 1) {
