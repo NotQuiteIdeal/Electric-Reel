@@ -68,6 +68,7 @@ static int num_characteristics = 0;
 void subscribe_to_characteristics();
 int characteristic_index = 0;
 volatile int connection_status = 0;
+extern bool alarm_enabled;
 
 
 // Checks if the advertisement contains the correct service (UNUSED)
@@ -192,7 +193,11 @@ void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *pa
                 //printf("Motor Speed: %u\n", int_value);
                 break;
             case 0x0015:
-                fish_alarm = int_value;
+                if (alarm_enabled){
+                    fish_alarm = int_value;
+                } else {
+                    fish_alarm = 0;
+                }
                 //printf("Fish Alarm: %u\n", int_value);
                 break;
             case 0x0018:

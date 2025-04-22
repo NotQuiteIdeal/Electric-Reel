@@ -104,7 +104,7 @@
  
  // New global variables for contrast and brightness (0–100%).
  int contrast_value = 50;    // Default 50% --> After mapping, output voltage ~? (see math below)
- int brightness_value = 100;  // Default 100%
+ int brightness_value = 10;  // Default 100%
  
  // =========================
  // Other Project Constants & Variables
